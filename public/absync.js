@@ -21,7 +21,7 @@ var absync;
 		var builder = {};
 
 		builder.assemble = function( then ) {
-			angular.module( "fmServices" )
+			angular.module( "absync" )
 				.factory(
 				collectionName,
 				[ "$q", "$rootScope", "$http",
