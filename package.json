@@ -1,0 +1,25 @@
+{
+  "name": "absync",
+  "version": "0.0.0",
+  "description": "absync",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oliversalzburg/absync.git"
+  },
+  "author": "Oliver Salzburg <oliver.salzburg@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/oliversalzburg/absync/issues"
+  },
+  "homepage": "https://github.com/oliversalzburg/absync",
+  "dependencies": {
+    "lodash": "^2.4.1",
+    "mongoose": "^3.8.17",
+    "mongoose-schema-extend": "^0.1.7",
+    "socket.io": "^1.1.0"
+  }
+}
