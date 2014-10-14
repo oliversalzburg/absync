@@ -20,8 +20,9 @@ var absync;
 
 		var builder = {};
 
-		builder.assemble = function( then ) {
-			angular.module( "absync" )
+		builder.assemble = function( then, inModule ) {
+			inModule = inModule || "absync";
+			angular.module( inModule )
 				.factory(
 				collectionName,
 				[ "$q", "$rootScope", "$http",
