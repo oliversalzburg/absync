@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/oliversalzburg/absync",
   "dependencies": {
+    "fm-log": "^0.7.1",
     "lodash": "^2.4.1",
     "mongoose": "^3.8.17",
     "mongoose-schema-extend": "^0.1.7",
