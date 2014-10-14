@@ -12,6 +12,7 @@
     "node_modules",
     "bower_components",
     "public/lib",
+    "lib",
     "test",
     "tests"
   ]
