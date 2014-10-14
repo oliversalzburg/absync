@@ -43,7 +43,7 @@ var absync;
 								cacheService.entityCacheRaw = [];
 
 								console.log( "Retrieving '" + collectionName + "' collection…" );
-								api.get( collectionUri )
+								$http.get( collectionUri )
 									.then( function( peopleResult ) {
 										cacheService.entityCacheRaw = peopleResult.data;
 										cacheService.dataAvailableDeferred.resolve( peopleResult.data );
