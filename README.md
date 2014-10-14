@@ -48,7 +48,7 @@ One of the key concepts of absync is that model properties can be decorated with
 		deviceToken         : { type : String }
 	};
 	
-	new TypeDecorator( typeDescription )
+	new TypeDecorator( extendedTypeDescription )
 		.decorate( "identifierForVendor", TypeInfo.USERCLASS_USER, [ TypeInfo.HIDDEN, TypeInfo.READ_ONLY ] )
 		.decorate( "deviceToken", TypeInfo.USERCLASS_USER, [ TypeInfo.CONCEALED, TypeInfo.READ_ONLY ] )
 	;
@@ -56,7 +56,7 @@ One of the key concepts of absync is that model properties can be decorated with
 	var extended = typeFactory.extend( "IosDevice", "Device", extendedTypeDescription );
 	```
 
-2. When data changes, use typehelper to sanitize inputs and conductor to synchronize updates with clients:
+2. When data changes, use *typehelper* to sanitize inputs and *conductor* to synchronize updates with clients:
 
 	```js
 	module.exports.updateDevice = function( request, response ) {
