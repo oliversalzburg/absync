@@ -81,8 +81,8 @@ var absync;
 			angular.module( inModule )
 				.factory(
 				collectionName,
-				[ "$q", "$rootScope", "$http", "absync",
-					function( $q, $rootScope, $http, absync ) {
+				[ "$q", "$rootScope", "$http", "$log", "absync",
+					function( $q, $rootScope, $http, $log, absync ) {
 						var cacheService = this;
 
 						cacheService.name = collectionName;
@@ -99,7 +99,7 @@ var absync;
 							if( null === cacheService.entityCacheRaw ) {
 								cacheService.entityCacheRaw = [];
 
-								console.log( "Retrieving '" + collectionName + "' collection…" );
+								$log.info( "Retrieving '" + collectionName + "' collection…" );
 								$http.get( collectionUri )
 									.then( function( peopleResult ) {
 										cacheService.entityCacheRaw = peopleResult.data;
@@ -190,7 +190,7 @@ var absync;
 										}
 									},
 									function( error ) {
-										console.error( error );
+										$log.error( error );
 									} );
 
 							} else {
@@ -207,7 +207,7 @@ var absync;
 										}
 									},
 									function( error ) {
-										console.error( error );
+										$log.error( error );
 									} );
 							}
 
@@ -233,7 +233,7 @@ var absync;
 									deferred.resolve();
 								} )
 								.error( function( data, status, headers, config ) {
-									console.error( data );
+									$log.error( data );
 									deferred.reject( new Error( "Unable to delete entity." ) );
 								} );
 
@@ -245,7 +245,7 @@ var absync;
 						 * @param {Object} entityToCache
 						 */
 						function updateCacheWithEntity( entityToCache ) {
-							console.log( "Updating entity in cache..." );
+							$log.info( "Updating entity in cache..." );
 							var found = false;
 							for( var entityIndex = 0, entity = cacheService.entityCache[ 0 ], cacheSize = cacheService.entityCache.length;
 							     entityIndex < cacheSize;
@@ -327,7 +327,7 @@ var absync;
 								// Determine if the received record consists ONLY of an id property,
 								// which would mean that this record was deleted from the backend.
 								if( 1 == Object.keys( entityReceived ).length && entityReceived.hasOwnProperty( "id" ) ) {
-									console.log( "Entity was deleted from the server. Updating cache..." );
+									$log.info( "Entity was deleted from the server. Updating cache..." );
 									removeEntityFromCache( entityReceived.id );
 								} else {
 									updateCacheWithEntity( fromJson( entityReceived ) );
