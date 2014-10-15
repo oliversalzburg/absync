@@ -152,7 +152,7 @@ var absync;
 									$http.get( entityUri + "/" + id ).success(
 										function( data ) {
 											if( !data[ entityName ] ) {
-												deferred.reject( new Error( "The requested person could not be found in the database." ) );
+												deferred.reject( new Error( "The requested entity could not be found in the database." ) );
 												return;
 											}
 
@@ -181,7 +181,7 @@ var absync;
 								promise = $http.put( entityUri + "/" + entity.id, wrapper );
 								promise
 									.then( function( result ) {
-										// Writing a person to the backend will usually invoke an update event to be
+										// Writing an entity to the backend will usually invoke an update event to be
 										// broadcast over websockets, where would also retrieve the updated record.
 										// We still put the updated record we receive here into the cache to ensure early consistency.
 										if( result.data[ entityName ] ) {
@@ -194,11 +194,11 @@ var absync;
 									} );
 
 							} else {
-								// Create a new person
+								// Create a new entity
 								promise = $http.post( collectionUri, wrapper );
 								promise
 									.then( function( result ) {
-										// Writing a person to the backend will usually invoke an update event to be
+										// Writing an entity to the backend will usually invoke an update event to be
 										// broadcast over websockets, where would also retrieve the updated record.
 										// We still put the updated record we receive here into the cache to ensure early consistency.
 										if( result.data[ entityName ] ) {
@@ -318,7 +318,7 @@ var absync;
 							return lookupTable;
 						};
 
-						// Listen for person broadcasts. These are sent when a person record is received through a websocket.
+						// Listen for entity broadcasts. These are sent when a record is received through a websocket.
 						cacheService.ensureLoaded().then( function() {
 							$rootScope.$on( entityName, function( event, args ) {
 
