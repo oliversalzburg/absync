@@ -1,6 +1,62 @@
 var absync;
-(function( _absync ) {
+(function( _absync, undefined ) {
 	"use strict";
+
+	var absyncModule;
+
+	try {
+		absyncModule = angular.module( "absync" );
+	} catch( ignored ) {
+		absyncModule = angular.module( "absync", [] );
+	}
+
+	absyncModule.provider( "absync", function() {
+		var absyncProvider = this;
+		var ioSocket;
+
+		absyncProvider.configure = function( configuration ) {
+			if( typeof configuration == "function" && typeof configuration.connect == "function" ) {
+				// Assume io
+				ioSocket = configuration.connect( undefined );
+				return;
+			}
+
+			if( io && io.Socket && configuration instanceof io.Socket ) {
+				// Assume io.Socket
+				ioSocket = configuration;
+				return;
+			}
+		};
+
+		absyncProvider.$get = {};
+		absyncProvider.$get.$inject = [ "$rootScope" ];
+		absyncProvider.$get = function( $rootScope ) {
+			return {
+				on   : function( eventName, callback ) {
+					var wrapper = function() {
+						var args = arguments;
+						$rootScope.$apply( function() {
+							callback.apply( ioSocket, args );
+						} );
+					};
+					ioSocket.on( eventName, wrapper );
+					return function() {
+						ioSocket.removeListener( eventName, wrapper );
+					};
+				},
+				emit : function( eventName, data, callback ) {
+					ioSocket.emit( eventName, data, function() {
+						var args = arguments;
+						$rootScope.$apply( function() {
+							if( callback ) {
+								callback.apply( ioSocket, args );
+							}
+						} );
+					} );
+				}
+			};
+		}
+	} );
 
 	/**
 	 * Constructs a new caching module for a certain entity and the collection thereof.
@@ -25,8 +81,8 @@ var absync;
 			angular.module( inModule )
 				.factory(
 				collectionName,
-				[ "$q", "$rootScope", "$http",
-					function( $q, $rootScope, $http ) {
+				[ "$q", "$rootScope", "$http", "absync",
+					function( $q, $rootScope, $http, absync ) {
 						var cacheService = this;
 
 						cacheService.name = collectionName;
@@ -277,6 +333,10 @@ var absync;
 									updateCacheWithEntity( fromJson( entityReceived ) );
 								}
 							} );
+						} );
+
+						absync.on( entityName, function( message ) {
+							$rootScope.$broadcast( entityName, message[ entityName ] );
 						} );
 
 						if( then ) {
