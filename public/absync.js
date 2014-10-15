@@ -70,19 +70,25 @@ var absync;
 	 * When an API endpoint returns a member of the collection, the returned JSON object is expected to contain the entity within a member of this name.
 	 * @param {String} entityUri The URI from which a single entity of the collection can be retrieved.
 	 * @param {String} collectionUri The URI from which the collection can be retrieved.
-	 * @param {Function} fromJson A function that can convert a JSON instance of one member of the collection into a proper object.
+	 * @param {Function} [fromJson] A function that can convert a JSON instance of one member of the collection into a proper object.
 	 */
 	_absync.CacheServiceFactory = function cache( collectionName, entityName, collectionUri, entityUri, fromJson ) {
 
 		var builder = {};
+
+		if( !fromJson ) {
+			fromJson = function( instance ) {
+				return instance;
+			}
+		}
 
 		builder.assemble = function( then, inModule ) {
 			inModule = inModule || "absync";
 			angular.module( inModule )
 				.factory(
 				collectionName,
-				[ "$q", "$rootScope", "$http", "absync",
-					function( $q, $rootScope, $http, absync ) {
+				[ "$q", "$rootScope", "$http", "$log", "absync",
+					function( $q, $rootScope, $http, $log, absync ) {
 						var cacheService = this;
 
 						cacheService.name = collectionName;
@@ -99,7 +105,7 @@ var absync;
 							if( null === cacheService.entityCacheRaw ) {
 								cacheService.entityCacheRaw = [];
 
-								console.log( "Retrieving '" + collectionName + "' collection…" );
+								$log.info( "Retrieving '" + collectionName + "' collection…" );
 								$http.get( collectionUri )
 									.then( function( peopleResult ) {
 										cacheService.entityCacheRaw = peopleResult.data;
@@ -152,7 +158,7 @@ var absync;
 									$http.get( entityUri + "/" + id ).success(
 										function( data ) {
 											if( !data[ entityName ] ) {
-												deferred.reject( new Error( "The requested person could not be found in the database." ) );
+												deferred.reject( new Error( "The requested entity could not be found in the database." ) );
 												return;
 											}
 
@@ -181,7 +187,7 @@ var absync;
 								promise = $http.put( entityUri + "/" + entity.id, wrapper );
 								promise
 									.then( function( result ) {
-										// Writing a person to the backend will usually invoke an update event to be
+										// Writing an entity to the backend will usually invoke an update event to be
 										// broadcast over websockets, where would also retrieve the updated record.
 										// We still put the updated record we receive here into the cache to ensure early consistency.
 										if( result.data[ entityName ] ) {
@@ -190,15 +196,15 @@ var absync;
 										}
 									},
 									function( error ) {
-										console.error( error );
+										$log.error( error );
 									} );
 
 							} else {
-								// Create a new person
+								// Create a new entity
 								promise = $http.post( collectionUri, wrapper );
 								promise
 									.then( function( result ) {
-										// Writing a person to the backend will usually invoke an update event to be
+										// Writing an entity to the backend will usually invoke an update event to be
 										// broadcast over websockets, where would also retrieve the updated record.
 										// We still put the updated record we receive here into the cache to ensure early consistency.
 										if( result.data[ entityName ] ) {
@@ -207,7 +213,7 @@ var absync;
 										}
 									},
 									function( error ) {
-										console.error( error );
+										$log.error( error );
 									} );
 							}
 
@@ -233,7 +239,7 @@ var absync;
 									deferred.resolve();
 								} )
 								.error( function( data, status, headers, config ) {
-									console.error( data );
+									$log.error( data );
 									deferred.reject( new Error( "Unable to delete entity." ) );
 								} );
 
@@ -245,7 +251,7 @@ var absync;
 						 * @param {Object} entityToCache
 						 */
 						function updateCacheWithEntity( entityToCache ) {
-							console.log( "Updating entity in cache..." );
+							$log.info( "Updating entity in cache..." );
 							var found = false;
 							for( var entityIndex = 0, entity = cacheService.entityCache[ 0 ], cacheSize = cacheService.entityCache.length;
 							     entityIndex < cacheSize;
@@ -318,7 +324,7 @@ var absync;
 							return lookupTable;
 						};
 
-						// Listen for person broadcasts. These are sent when a person record is received through a websocket.
+						// Listen for entity broadcasts. These are sent when a record is received through a websocket.
 						cacheService.ensureLoaded().then( function() {
 							$rootScope.$on( entityName, function( event, args ) {
 
@@ -327,7 +333,7 @@ var absync;
 								// Determine if the received record consists ONLY of an id property,
 								// which would mean that this record was deleted from the backend.
 								if( 1 == Object.keys( entityReceived ).length && entityReceived.hasOwnProperty( "id" ) ) {
-									console.log( "Entity was deleted from the server. Updating cache..." );
+									$log.info( "Entity was deleted from the server. Updating cache..." );
 									removeEntityFromCache( entityReceived.id );
 								} else {
 									updateCacheWithEntity( fromJson( entityReceived ) );

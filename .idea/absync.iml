@@ -8,5 +8,6 @@
     <orderEntry type="library" name="lodash-DefinitelyTyped" level="application" />
     <orderEntry type="library" name="mongoose-DefinitelyTyped" level="application" />
     <orderEntry type="library" name="absync node_modules" level="project" />
+    <orderEntry type="library" name="angular" level="application" />
   </component>
 </module>
