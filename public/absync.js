@@ -28,8 +28,6 @@ var absync;
 			}
 		};
 
-		absyncProvider.$get = {};
-		absyncProvider.$get.$inject = [ "$rootScope" ];
 		absyncProvider.$get = function( $rootScope ) {
 			return {
 				on   : function( eventName, callback ) {
@@ -56,6 +54,7 @@ var absync;
 				}
 			};
 		}
+		absyncProvider.$get.$inject = [ "$rootScope" ];
 	} );
 
 	/**
