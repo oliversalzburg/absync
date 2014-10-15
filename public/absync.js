@@ -17,7 +17,7 @@ var absync;
 		absyncProvider.configure = function( configuration ) {
 			if( typeof configuration == "function" && typeof configuration.connect == "function" ) {
 				// Assume io
-				ioSocket = configuration.connect( undefined );
+				ioSocket = configuration();
 				return;
 			}
 
