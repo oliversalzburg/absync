@@ -70,11 +70,17 @@ var absync;
 	 * When an API endpoint returns a member of the collection, the returned JSON object is expected to contain the entity within a member of this name.
 	 * @param {String} entityUri The URI from which a single entity of the collection can be retrieved.
 	 * @param {String} collectionUri The URI from which the collection can be retrieved.
-	 * @param {Function} fromJson A function that can convert a JSON instance of one member of the collection into a proper object.
+	 * @param {Function} [fromJson] A function that can convert a JSON instance of one member of the collection into a proper object.
 	 */
 	_absync.CacheServiceFactory = function cache( collectionName, entityName, collectionUri, entityUri, fromJson ) {
 
 		var builder = {};
+
+		if( !fromJson ) {
+			fromJson = function( instance ) {
+				return instance;
+			}
+		}
 
 		builder.assemble = function( then, inModule ) {
 			inModule = inModule || "absync";
