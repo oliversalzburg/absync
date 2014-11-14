@@ -13,36 +13,63 @@ var absync;
 	absyncModule.provider( "absync", function() {
 		var absyncProvider = this;
 		var ioSocket;
+		// If socket.io was not connected when a service was constructed, we put the registration request
+		// into this array and register it as soon as socket.io is configured.
+		var registerLater = [];
 
-		absyncProvider.configure = function( configuration ) {
-			if( typeof configuration == "function" && typeof configuration.connect == "function" ) {
+		function configure( configuration ) {
+			var socket = configuration.socket || configuration;
+			if( typeof socket == "function" ) {
 				// Assume io
-				ioSocket = configuration();
-				return;
+				ioSocket = socket();
+
+			} else if( io && io.Socket && socket instanceof io.Socket ) {
+				// Assume io.Socket
+				ioSocket = socket;
+			} else {
+				throw new Error( "configure() expects input to be a function or a socket.io Socket instance." );
 			}
 
-			if( io && io.Socket && configuration instanceof io.Socket ) {
-				// Assume io.Socket
-				ioSocket = configuration;
-				return;
+			if( registerLater.length ) {
+				angular.forEach( registerLater, function registerListener( listener ) {
+					handleEntityEvent( listener.eventName, listener.callback, listener.rootScope );
+				} );
 			}
-		};
+		}
+
+		function handleEntityEvent( eventName, callback, rootScope ) {
+			var wrapper = function() {
+				var args = arguments;
+				rootScope.$apply( function() {
+					callback.apply( ioSocket, args );
+				} );
+			};
+			ioSocket.on( eventName, wrapper );
+			return function() {
+				ioSocket.removeListener( eventName, wrapper );
+			};
+		}
+
+
+		// Register on the provider itself to allow early configuration during setup phase.
+		absyncProvider.configure = configure;
 
 		absyncProvider.$get = function( $rootScope ) {
 			return {
-				on   : function( eventName, callback ) {
-					var wrapper = function() {
-						var args = arguments;
-						$rootScope.$apply( function() {
-							callback.apply( ioSocket, args );
-						} );
-					};
-					ioSocket.on( eventName, wrapper );
-					return function() {
-						ioSocket.removeListener( eventName, wrapper );
-					};
+				configure : configure,
+				on        : function( eventName, callback ) {
+					if( !ioSocket ) {
+						registerLater.push( { eventName : eventName, callback : callback, rootScope : $rootScope } );
+						return;
+					}
+
+					handleEntityEvent( eventName, callback, $rootScope );
 				},
-				emit : function( eventName, data, callback ) {
+				emit      : function( eventName, data, callback ) {
+					if( !ioSocket ) {
+						throw new Error( "socket.io is not initialized." );
+					}
+
 					ioSocket.emit( eventName, data, function() {
 						var args = arguments;
 						$rootScope.$apply( function() {
@@ -53,7 +80,7 @@ var absync;
 					} );
 				}
 			};
-		}
+		};
 		absyncProvider.$get.$inject = [ "$rootScope" ];
 	} );
 
@@ -92,7 +119,7 @@ var absync;
 
 						cacheService.name = collectionName;
 
-						cacheService.entityCache = null;
+						cacheService.entityCache = [];
 						cacheService.entityCacheRaw = null;
 
 						cacheService.dataAvailableDeferred = cacheService.dataAvailableDeferred || $q.defer();
@@ -100,17 +127,21 @@ var absync;
 						cacheService.dataAvailable = cacheService.dataAvailableDeferred.promise;
 						cacheService.objectsAvailable = cacheService.objectsAvailableDeferred.promise;
 
-						cacheService.ensureLoaded = function() {
-							if( null === cacheService.entityCacheRaw ) {
+						cacheService.httpInterface = $http;
+
+						cacheService.ensureLoaded = function( forceReload ) {
+							forceReload = (forceReload === true);
+							if( null === cacheService.entityCacheRaw || forceReload ) {
 								cacheService.entityCacheRaw = [];
 
 								$log.info( "Retrieving '" + collectionName + "' collection…" );
-								$http.get( collectionUri )
+								cacheService.httpInterface.get( collectionUri )
 									.then( function( peopleResult ) {
 										cacheService.entityCacheRaw = peopleResult.data;
 										cacheService.dataAvailableDeferred.resolve( peopleResult.data );
 									},
 									function( error ) {
+										cacheService.entityCacheRaw = null;
 										$rootScope.$emit( "authorizationError", error );
 									} );
 							}
@@ -122,7 +153,7 @@ var absync;
 
 						cacheService.dataAvailable
 							.then( function( rawData ) {
-								cacheService.entityCache = [];
+								cacheService.entityCache = cacheService.entityCache || [];
 								rawData[ collectionName ].forEach( function( rawEntity ) {
 									cacheService.entityCache.push( fromJson( rawEntity ) );
 								} );
@@ -154,7 +185,7 @@ var absync;
 									}
 
 									// Grab the entity from the backend.
-									$http.get( entityUri + "/" + id ).success(
+									cacheService.httpInterface.get( entityUri + "/" + id ).success(
 										function( data ) {
 											if( !data[ entityName ] ) {
 												deferred.reject( new Error( "The requested entity could not be found in the database." ) );
@@ -183,7 +214,7 @@ var absync;
 							wrapper[ entityName ] = entity;
 
 							if( "undefined" !== typeof( entity.id ) ) {
-								promise = $http.put( entityUri + "/" + entity.id, wrapper );
+								promise = cacheService.httpInterface.put( entityUri + "/" + entity.id, wrapper );
 								promise
 									.then( function( result ) {
 										// Writing an entity to the backend will usually invoke an update event to be
@@ -200,7 +231,7 @@ var absync;
 
 							} else {
 								// Create a new entity
-								promise = $http.post( collectionUri, wrapper );
+								promise = cacheService.httpInterface.post( collectionUri, wrapper );
 								promise
 									.then( function( result ) {
 										// Writing an entity to the backend will usually invoke an update event to be
@@ -232,7 +263,7 @@ var absync;
 							var deferred = $q.defer();
 
 							var entityId = entity.id;
-							$http.delete( entityUri + "/" + entityId )
+							cacheService.httpInterface.delete( entityUri + "/" + entityId )
 								.success( function( data, status, headers, config ) {
 									removeEntityFromCache( entityId );
 									deferred.resolve();
@@ -260,9 +291,17 @@ var absync;
 										{
 											service : cacheService,
 											cache   : cacheService.entityCache,
-											entity  : cacheService.entityCache[ entityIndex ]
+											entity  : cacheService.entityCache[ entityIndex ],
+											updated : entityToCache
 										} );
-									cacheService.entityCache[ entityIndex ].copyFrom( entityToCache );
+									// Use the "copyFrom" method on the entity, if it exists, otherwise use naive approach.
+									var targetEntity = cacheService.entityCache[ entityIndex ];
+									if( targetEntity.copyFrom ) {
+										targetEntity.copyFrom( entityToCache );
+									} else {
+										angular.extend( targetEntity, entityToCache );
+									}
+
 									found = true;
 									$rootScope.$broadcast( "entityUpdated",
 										{
