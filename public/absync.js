@@ -14,7 +14,7 @@ var absync;
 		var absyncProvider = this;
 		var ioSocket;
 
-		absyncProvider.configure = function( configuration ) {
+		function configure( configuration ) {
 			if( typeof configuration == "function" ) {
 				// Assume io
 				ioSocket = configuration();
@@ -26,11 +26,19 @@ var absync;
 				ioSocket = configuration;
 				return;
 			}
-		};
+		}
+
+		// Register on the provider itself to allow early configuration during setup phase.
+		absyncProvider.configure = configure;
 
 		absyncProvider.$get = function( $rootScope ) {
 			return {
-				on   : function( eventName, callback ) {
+				configure : configure,
+				on        : function( eventName, callback ) {
+					if( !ioSocket ) {
+						throw new Error( "socket.io is not initialized." );
+					}
+
 					var wrapper = function() {
 						var args = arguments;
 						$rootScope.$apply( function() {
@@ -42,7 +50,11 @@ var absync;
 						ioSocket.removeListener( eventName, wrapper );
 					};
 				},
-				emit : function( eventName, data, callback ) {
+				emit      : function( eventName, data, callback ) {
+					if( !ioSocket ) {
+						throw new Error( "socket.io is not initialized." );
+					}
+
 					ioSocket.emit( eventName, data, function() {
 						var args = arguments;
 						$rootScope.$apply( function() {
@@ -53,7 +65,7 @@ var absync;
 					} );
 				}
 			};
-		}
+		};
 		absyncProvider.$get.$inject = [ "$rootScope" ];
 	} );
 
