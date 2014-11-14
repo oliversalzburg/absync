@@ -18,13 +18,14 @@ var absync;
 		var registerLater = [];
 
 		function configure( configuration ) {
-			if( typeof configuration == "function" ) {
+			var socket = configuration.socket || configuration;
+			if( typeof socket == "function" ) {
 				// Assume io
-				ioSocket = configuration();
+				ioSocket = socket();
 
-			} else if( io && io.Socket && configuration instanceof io.Socket ) {
+			} else if( io && io.Socket && socket instanceof io.Socket ) {
 				// Assume io.Socket
-				ioSocket = configuration;
+				ioSocket = socket;
 			} else {
 				throw new Error( "configure() expects input to be a function or a socket.io Socket instance." );
 			}
