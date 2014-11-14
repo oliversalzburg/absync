@@ -119,7 +119,7 @@ var absync;
 
 						cacheService.name = collectionName;
 
-						cacheService.entityCache = null;
+						cacheService.entityCache = [];
 						cacheService.entityCacheRaw = null;
 
 						cacheService.dataAvailableDeferred = cacheService.dataAvailableDeferred || $q.defer();
@@ -150,7 +150,7 @@ var absync;
 
 						cacheService.dataAvailable
 							.then( function( rawData ) {
-								cacheService.entityCache = [];
+								cacheService.entityCache = cacheService.entityCache || [];
 								rawData[ collectionName ].forEach( function( rawEntity ) {
 									cacheService.entityCache.push( fromJson( rawEntity ) );
 								} );
