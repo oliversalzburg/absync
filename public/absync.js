@@ -260,7 +260,8 @@ var absync;
 										{
 											service : cacheService,
 											cache   : cacheService.entityCache,
-											entity  : cacheService.entityCache[ entityIndex ]
+											entity  : cacheService.entityCache[ entityIndex ],
+											updated : entityToCache
 										} );
 									cacheService.entityCache[ entityIndex ].copyFrom( entityToCache );
 									found = true;
