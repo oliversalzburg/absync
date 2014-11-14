@@ -127,9 +127,11 @@ var absync;
 						cacheService.dataAvailable = cacheService.dataAvailableDeferred.promise;
 						cacheService.objectsAvailable = cacheService.objectsAvailableDeferred.promise;
 
-						cacheService.ensureLoaded = function() {
-							if( null === cacheService.entityCacheRaw ) {
 						cacheService.httpInterface = $http;
+
+						cacheService.ensureLoaded = function( forceReload ) {
+							forceReload = (forceReload === true);
+							if( null === cacheService.entityCacheRaw || forceReload ) {
 								cacheService.entityCacheRaw = [];
 
 								$log.info( "Retrieving '" + collectionName + "' collection…" );
@@ -139,6 +141,7 @@ var absync;
 										cacheService.dataAvailableDeferred.resolve( peopleResult.data );
 									},
 									function( error ) {
+										cacheService.entityCacheRaw = null;
 										$rootScope.$emit( "authorizationError", error );
 									} );
 							}
