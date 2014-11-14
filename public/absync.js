@@ -13,20 +13,42 @@ var absync;
 	absyncModule.provider( "absync", function() {
 		var absyncProvider = this;
 		var ioSocket;
+		// If socket.io was not connected when a service was constructed, we put the registration request
+		// into this array and register it as soon as socket.io is configured.
+		var registerLater = [];
 
 		function configure( configuration ) {
 			if( typeof configuration == "function" ) {
 				// Assume io
 				ioSocket = configuration();
-				return;
-			}
 
-			if( io && io.Socket && configuration instanceof io.Socket ) {
+			} else if( io && io.Socket && configuration instanceof io.Socket ) {
 				// Assume io.Socket
 				ioSocket = configuration;
-				return;
+			} else {
+				throw new Error( "configure() expects input to be a function or a socket.io Socket instance." );
+			}
+
+			if( registerLater.length ) {
+				angular.forEach( registerLater, function registerListener( listener ) {
+					handleEntityEvent( listener.eventName, listener.callback, listener.rootScope );
+				} );
 			}
 		}
+
+		function handleEntityEvent( eventName, callback, rootScope ) {
+			var wrapper = function() {
+				var args = arguments;
+				rootScope.$apply( function() {
+					callback.apply( ioSocket, args );
+				} );
+			};
+			ioSocket.on( eventName, wrapper );
+			return function() {
+				ioSocket.removeListener( eventName, wrapper );
+			};
+		}
+
 
 		// Register on the provider itself to allow early configuration during setup phase.
 		absyncProvider.configure = configure;
@@ -36,19 +58,11 @@ var absync;
 				configure : configure,
 				on        : function( eventName, callback ) {
 					if( !ioSocket ) {
-						throw new Error( "socket.io is not initialized." );
+						registerLater.push( { eventName : eventName, callback : callback, rootScope : $rootScope } );
+						return;
 					}
 
-					var wrapper = function() {
-						var args = arguments;
-						$rootScope.$apply( function() {
-							callback.apply( ioSocket, args );
-						} );
-					};
-					ioSocket.on( eventName, wrapper );
-					return function() {
-						ioSocket.removeListener( eventName, wrapper );
-					};
+					handleEntityEvent( eventName, callback, $rootScope );
 				},
 				emit      : function( eventName, data, callback ) {
 					if( !ioSocket ) {
