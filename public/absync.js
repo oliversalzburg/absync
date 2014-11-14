@@ -129,10 +129,11 @@ var absync;
 
 						cacheService.ensureLoaded = function() {
 							if( null === cacheService.entityCacheRaw ) {
+						cacheService.httpInterface = $http;
 								cacheService.entityCacheRaw = [];
 
 								$log.info( "Retrieving '" + collectionName + "' collection…" );
-								$http.get( collectionUri )
+								cacheService.httpInterface.get( collectionUri )
 									.then( function( peopleResult ) {
 										cacheService.entityCacheRaw = peopleResult.data;
 										cacheService.dataAvailableDeferred.resolve( peopleResult.data );
@@ -181,7 +182,7 @@ var absync;
 									}
 
 									// Grab the entity from the backend.
-									$http.get( entityUri + "/" + id ).success(
+									cacheService.httpInterface.get( entityUri + "/" + id ).success(
 										function( data ) {
 											if( !data[ entityName ] ) {
 												deferred.reject( new Error( "The requested entity could not be found in the database." ) );
@@ -210,7 +211,7 @@ var absync;
 							wrapper[ entityName ] = entity;
 
 							if( "undefined" !== typeof( entity.id ) ) {
-								promise = $http.put( entityUri + "/" + entity.id, wrapper );
+								promise = cacheService.httpInterface.put( entityUri + "/" + entity.id, wrapper );
 								promise
 									.then( function( result ) {
 										// Writing an entity to the backend will usually invoke an update event to be
@@ -227,7 +228,7 @@ var absync;
 
 							} else {
 								// Create a new entity
-								promise = $http.post( collectionUri, wrapper );
+								promise = cacheService.httpInterface.post( collectionUri, wrapper );
 								promise
 									.then( function( result ) {
 										// Writing an entity to the backend will usually invoke an update event to be
@@ -259,7 +260,7 @@ var absync;
 							var deferred = $q.defer();
 
 							var entityId = entity.id;
-							$http.delete( entityUri + "/" + entityId )
+							cacheService.httpInterface.delete( entityUri + "/" + entityId )
 								.success( function( data, status, headers, config ) {
 									removeEntityFromCache( entityId );
 									deferred.resolve();
