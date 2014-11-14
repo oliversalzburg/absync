@@ -290,7 +290,14 @@ var absync;
 											entity  : cacheService.entityCache[ entityIndex ],
 											updated : entityToCache
 										} );
-									cacheService.entityCache[ entityIndex ].copyFrom( entityToCache );
+									// Use the "copyFrom" method on the entity, if it exists, otherwise use naive approach.
+									var targetEntity = cacheService.entityCache[ entityIndex ];
+									if( targetEntity.copyFrom ) {
+										targetEntity.copyFrom( entityToCache );
+									} else {
+										angular.extend( targetEntity, entityToCache );
+									}
+
 									found = true;
 									$rootScope.$broadcast( "entityUpdated",
 										{
