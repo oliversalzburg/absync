@@ -365,7 +365,6 @@ var absync;
 						// Listen for entity broadcasts. These are sent when a record is received through a websocket.
 						cacheService.ensureLoaded().then( function() {
 							$rootScope.$on( entityName, function( event, args ) {
-
 								var entityReceived = args;
 
 								// Determine if the received record consists ONLY of an id property,
@@ -377,10 +376,25 @@ var absync;
 									updateCacheWithEntity( fromJson( entityReceived ) );
 								}
 							} );
+							$rootScope.$on( collectionName, function( event, args ) {
+								var collectionReceived = args;
+
+								// Clear current cache before importing collection
+								while( 0 < cacheService.entityCache.length ) {
+									cacheService.entityCache.pop();
+								}
+
+								collectionReceived.forEach( function addEntityToCache( entityReceived ) {
+									updateCacheWithEntity( fromJson( entityReceived ) );
+								} )
+							} );
 						} );
 
 						absync.on( entityName, function( message ) {
 							$rootScope.$broadcast( entityName, message[ entityName ] );
+						} );
+						absync.on( collectionName, function( message ) {
+							$rootScope.$broadcast( collectionName, message[ collectionName ] );
 						} );
 
 						if( then ) {
