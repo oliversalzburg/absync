@@ -134,6 +134,9 @@ var absync;
 					if( null === cacheService.entityCacheRaw || forceReload ) {
 						cacheService.entityCacheRaw = [];
 
+						if( !collectionName || !collectionUri ) {
+							return $q( true )
+						}
 						$log.info( "Retrieving '" + collectionName + "' collection…" );
 						cacheService.httpInterface.get( collectionUri )
 							.then( function( peopleResult ) {
@@ -149,7 +152,6 @@ var absync;
 					return $q.all( [ cacheService.dataAvailable,
 						cacheService.objectsAvailable ] );
 				};
-				cacheService.ensureLoaded();
 
 				cacheService.dataAvailable
 					.then( function( rawData ) {
@@ -172,32 +174,28 @@ var absync;
 				cacheService.read = function( id ) {
 					var deferred = $q.defer();
 
-					cacheService.ensureLoaded().then( onDataAvailable );
-					function onDataAvailable() {
-						// Check if the entity is in the cache and return instantly if found.
-						for( var entityIndex = 0, entity = cacheService.entityCache[ 0 ], cacheSize = cacheService.entityCache.length;
-						     entityIndex < cacheSize;
-						     ++entityIndex, entity = cacheService.entityCache[ entityIndex ] ) {
-							if( entity.id == id ) {
-								deferred.resolve( entity );
-								return;
-							}
-						}
-
-						// Grab the entity from the backend.
-						cacheService.httpInterface.get( entityUri + "/" + id ).success( onEntityRetrieved );
-						function onEntityRetrieved( data ) {
-							if( !data[ entityName ] ) {
-								deferred.reject( new Error( "The requested entity could not be found in the database." ) );
-								return;
-							}
-
-							var entity = fromJson( data[ entityName ] );
-							updateCacheWithEntity( entity );
+					// Check if the entity is in the cache and return instantly if found.
+					for( var entityIndex = 0, entity = cacheService.entityCache[ 0 ], cacheSize = cacheService.entityCache.length;
+					     entityIndex < cacheSize;
+					     ++entityIndex, entity = cacheService.entityCache[ entityIndex ] ) {
+						if( entity.id == id ) {
 							deferred.resolve( entity );
+							deferred.promise;
 						}
 					}
 
+					// Grab the entity from the backend.
+					cacheService.httpInterface.get( entityUri + "/" + id ).success( onEntityRetrieved );
+					function onEntityRetrieved( data ) {
+						if( !data[ entityName ] ) {
+							deferred.reject( new Error( "The requested entity could not be found in the database." ) );
+							deferred.promise;
+						}
+
+						var entity = fromJson( data[ entityName ] );
+						updateCacheWithEntity( entity );
+						deferred.resolve( entity );
+					}
 
 					return deferred.promise;
 				};
@@ -363,32 +361,31 @@ var absync;
 				};
 
 				// Listen for entity broadcasts. These are sent when a record is received through a websocket.
-				cacheService.ensureLoaded().then( function() {
-					$rootScope.$on( entityName, function( event, args ) {
-						var entityReceived = args;
+				$rootScope.$on( entityName, function( event, args ) {
+					var entityReceived = args;
 
-						// Determine if the received record consists ONLY of an id property,
-						// which would mean that this record was deleted from the backend.
-						if( 1 == Object.keys( entityReceived ).length && entityReceived.hasOwnProperty( "id" ) ) {
-							$log.info( "Entity was deleted from the server. Updating cache..." );
-							removeEntityFromCache( entityReceived.id );
-						} else {
-							updateCacheWithEntity( fromJson( entityReceived ) );
-						}
-					} );
-					$rootScope.$on( collectionName, function( event, args ) {
-						var collectionReceived = args;
-
-						// Clear current cache before importing collection
-						while( 0 < cacheService.entityCache.length ) {
-							cacheService.entityCache.pop();
-						}
-
-						collectionReceived.forEach( function addEntityToCache( entityReceived ) {
-							updateCacheWithEntity( fromJson( entityReceived ) );
-						} )
-					} );
+					// Determine if the received record consists ONLY of an id property,
+					// which would mean that this record was deleted from the backend.
+					if( 1 == Object.keys( entityReceived ).length && entityReceived.hasOwnProperty( "id" ) ) {
+						$log.info( "Entity was deleted from the server. Updating cache..." );
+						removeEntityFromCache( entityReceived.id );
+					} else {
+						updateCacheWithEntity( fromJson( entityReceived ) );
+					}
 				} );
+				$rootScope.$on( collectionName, function( event, args ) {
+					var collectionReceived = args;
+
+					// Clear current cache before importing collection
+					while( 0 < cacheService.entityCache.length ) {
+						cacheService.entityCache.pop();
+					}
+
+					collectionReceived.forEach( function addEntityToCache( entityReceived ) {
+						updateCacheWithEntity( fromJson( entityReceived ) );
+					} )
+				} );
+
 
 				absync.on( entityName, function( message ) {
 					$rootScope.$broadcast( entityName, message[ entityName ] );
