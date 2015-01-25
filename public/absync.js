@@ -180,7 +180,7 @@ var absync;
 					     ++entityIndex, entity = cacheService.entityCache[ entityIndex ] ) {
 						if( entity.id == id ) {
 							deferred.resolve( entity );
-							deferred.promise;
+							return deferred.promise;
 						}
 					}
 
@@ -189,7 +189,7 @@ var absync;
 					function onEntityRetrieved( data ) {
 						if( !data[ entityName ] ) {
 							deferred.reject( new Error( "The requested entity could not be found in the database." ) );
-							deferred.promise;
+							return deferred.promise;
 						}
 
 						var entity = fromJson( data[ entityName ] );
