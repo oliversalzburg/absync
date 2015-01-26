@@ -209,7 +209,7 @@ var absync;
 
 					// Wrap entity in a new object, with a single property, named after the entity type.
 					var wrapper = {};
-					wrapper[ entityName ] = entity;
+					wrapper[ entityName ] = cacheService.reduceComplex( entity );
 
 					if( "undefined" !== typeof( entity.id ) ) {
 						promise = cacheService.httpInterface.put( entityUri + "/" + entity.id, wrapper );
@@ -360,20 +360,26 @@ var absync;
 					return lookupTable;
 				};
 
-				cacheService.reduceComplex = function( entity ) {
+				cacheService.reduceComplex = function( entity, arrayInsteadOfObject ) {
+					var result = arrayInsteadOfObject ? [] : {};
 					for( var propertyName in entity ) {
 						if( !entity.hasOwnProperty( propertyName ) ) {
-							return;
+							continue;
 						}
 
 						if( Array.isArray( entity[ propertyName ] ) ) {
-							return cacheService.reduceComplex( entity[ propertyName ] );
+							result[ propertyName ] = cacheService.reduceComplex( entity[ propertyName ], true );
+							continue;
 						}
 
-						if( entity[ propertyName ].id ) {
-							entity[ propertyName ] = id;
+						if( entity[ propertyName ] && entity[ propertyName ].id ) {
+							result[ propertyName ] = entity[ propertyName ].id;
+							continue;
 						}
+
+						result[ propertyName ] = entity[ propertyName ];
 					}
+					return result;
 				};
 
 				// Listen for entity broadcasts. These are sent when a record is received through a websocket.
