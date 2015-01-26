@@ -360,6 +360,22 @@ var absync;
 					return lookupTable;
 				};
 
+				cacheService.reduceComplex = function( entity ) {
+					for( var propertyName in entity ) {
+						if( !entity.hasOwnProperty( propertyName ) ) {
+							return;
+						}
+
+						if( Array.isArray( entity[ propertyName ] ) ) {
+							return cacheService.reduceComplex( entity[ propertyName ] );
+						}
+
+						if( entity[ propertyName ].id ) {
+							entity[ propertyName ] = id;
+						}
+					}
+				};
+
 				// Listen for entity broadcasts. These are sent when a record is received through a websocket.
 				$rootScope.$on( entityName, function( event, args ) {
 					var entityReceived = args;
