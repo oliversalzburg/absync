@@ -1,3 +1,5 @@
+![](doc/logo.png)
+
 absync is a highly opinionated framework to synchronize data pools in MEAN applications.
 
 It consists of:
