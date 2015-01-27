@@ -382,6 +382,26 @@ var absync;
 					return result;
 				};
 
+				cacheService.populateComplex = function( entity, propertyName, cache ) {
+					if( Array.isArray( entity[ propertyName ] ) ) {
+						var promises = entity[ propertyName ].map( function( element, index ) {
+							if( typeof entity[ propertyName ][ index ] !== "string" ) {
+								return;
+							}
+							return cache.read( entity[ propertyName ][ index ] )
+								.then( function( complex ) {
+									entity[ propertyName ][ index ] = complex;
+								} )
+						} );
+						return $q.all( promises );
+					} else {
+						return cache.read( entity[ propertyName ] )
+							.then( function( complex ) {
+								entity[ propertyName ] = complex;
+							} );
+					}
+				};
+
 				// Listen for entity broadcasts. These are sent when a record is received through a websocket.
 				$rootScope.$on( entityName, function( event, args ) {
 					var entityReceived = args;
