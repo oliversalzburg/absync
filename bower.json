@@ -1,7 +1,7 @@
 {
   "name": "absync",
   "main": "public/absync.js",
-  "version": "0.1.2",
+  "version": "0.2.0,
   "homepage": "https://github.com/oliversalzburg/absync",
   "authors": [
     "Oliver Salzburg <oliver.salzburg@gmail.com>"

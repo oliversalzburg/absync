@@ -360,6 +360,13 @@ var absync;
 					return lookupTable;
 				};
 
+				/**
+				 * Reduce instances of complex types within an entity with their respective IDs.
+				 * Note that no type checks are being performed. Every nested object with an "id" property is treated as a complex type.
+				 * @param {Object} entity The entity that should have its complex member reduced.
+				 * @param {Boolean} [arrayInsteadOfObject=false] true if the manipulated entity is an array; false if it's an object.
+				 * @returns {Object|Array} A copy of the input entity, with complex type instances replaced with their respective ID.
+				 */
 				cacheService.reduceComplex = function( entity, arrayInsteadOfObject ) {
 					var result = arrayInsteadOfObject ? [] : {};
 					for( var propertyName in entity ) {
@@ -367,36 +374,75 @@ var absync;
 							continue;
 						}
 
+						// Recurse for nested arrays.
 						if( Array.isArray( entity[ propertyName ] ) ) {
 							result[ propertyName ] = cacheService.reduceComplex( entity[ propertyName ], true );
 							continue;
 						}
 
+						// Replace complex type with its ID.
 						if( entity[ propertyName ] && entity[ propertyName ].id ) {
 							result[ propertyName ] = entity[ propertyName ].id;
 							continue;
 						}
 
+						// Just copy over the plain property.
 						result[ propertyName ] = entity[ propertyName ];
 					}
 					return result;
 				};
 
-				cacheService.populateComplex = function( entity, propertyName, cache ) {
+				/**
+				 * Populate references to complex types in an instance.
+				 * @param {Object} entity The entity that should be manipulated.
+				 * @param {String} propertyName The name of the property of entity which should be populated.
+				 * @param {Object} cache An instance of another caching service that can provide the complex
+				 * type instances which are being referenced in entity.
+				 * @param {Boolean} [force=false] If true, all complex types will be replaced with references to the
+				 * instances in cache; otherwise, only properties that are string representations of complex type IDs will be replaced.
+				 * @returns {Promise}
+				 */
+				cacheService.populateComplex = function( entity, propertyName, cache, force ) {
+					// If the target property is an array, ...
 					if( Array.isArray( entity[ propertyName ] ) ) {
-						var promises = entity[ propertyName ].map( function( element, index ) {
+						// ...map the elements in the array to promises.
+						var promises = entity[ propertyName ].map( function mapElementToPromise( element, index ) {
+							// We usually assume the properties to be strings (the ID of the referenced complex).
 							if( typeof entity[ propertyName ][ index ] !== "string" ) {
-								return;
+								// If "force" is enabled, we check if this non-string property is an object and has an "id" member, which is a string.
+								if( force && typeof entity[ propertyName ][ index ] === "object" && typeof entity[ propertyName ][ index ].id === "string" ) {
+									// If that is true, then we replace the whole object with the ID and continue as usual.
+									entity[ propertyName ][ index ] = entity[ propertyName ][ index ].id;
+								} else {
+									return $q.when( false );
+								}
 							}
+
+							// Treat the property as an ID and read the complex with that ID from the cache.
 							return cache.read( entity[ propertyName ][ index ] )
-								.then( function( complex ) {
+								.then( function onComplexRetrieved( complex ) {
+									// When the complex was retrieved, store it back into the array.
 									entity[ propertyName ][ index ] = complex;
 								} )
 						} );
+
 						return $q.all( promises );
 					} else {
+						// We usually assume the properties to be strings (the ID of the referenced complex).
+						if( typeof entity[ propertyName ] !== "string" ) {
+							// If "force" is enabled, we check if this non-string property is an object and has an "id" member, which is a string.
+							if( force && typeof entity[ propertyName ] === "object" && typeof entity[ propertyName ].id === "string" ) {
+								// If that is true, then we replace the whole object with the ID and continue as usual.
+								entity[ propertyName ] = entity[ propertyName ].id;
+							} else {
+								return $q.when( false );
+							}
+						}
+
+						// Treat the property as an ID and read the complex with that ID from the cache.
 						return cache.read( entity[ propertyName ] )
-							.then( function( complex ) {
+							.then( function onComplexRetrieved( complex ) {
+								// When the complex was retrieved, store it back into the entity.
 								entity[ propertyName ] = complex;
 							} );
 					}
