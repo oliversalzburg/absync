@@ -493,6 +493,17 @@ var absync;
 			wrapper.$inject = [ "$q", "$rootScope", "$http", "$log", "absync" ];
 		};
 
+		/**
+		 * Force construction of Angular service.
+		 */
+		builder.assembleNow = function() {
+			angular.element( document ).ready( forceConstruction );
+			function forceConstruction() {
+				var injector = angular.element( document.body ).injector();
+				injector.invoke( [ collectionName, angular.noop ] );
+			}
+		};
+
 		return builder;
 	};
 }( absync || (absync = {}) ));
