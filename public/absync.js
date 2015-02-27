@@ -128,6 +128,7 @@ var absync;
 				cacheService.objectsAvailable = cacheService.objectsAvailableDeferred.promise;
 
 				cacheService.httpInterface = $http;
+				cacheService.fromJson = fromJson;
 
 				cacheService.ensureLoaded = function( forceReload ) {
 					forceReload = (forceReload === true);
@@ -157,7 +158,7 @@ var absync;
 					.then( function( rawData ) {
 						cacheService.entityCache = cacheService.entityCache || [];
 						rawData[ collectionName ].forEach( function( rawEntity ) {
-							cacheService.entityCache.push( fromJson( rawEntity ) );
+							cacheService.entityCache.push( cacheService.fromJson( rawEntity ) );
 						} );
 						cacheService.objectsAvailableDeferred.resolve( cacheService.entityCache );
 						$rootScope.$broadcast( "collectionNew", {
@@ -192,7 +193,7 @@ var absync;
 							return deferred.promise;
 						}
 
-						var entity = fromJson( data[ entityName ] );
+						var entity = cacheService.fromJson( data[ entityName ] );
 						updateCacheWithEntity( entity );
 						deferred.resolve( entity );
 					}
@@ -219,7 +220,7 @@ var absync;
 								// broadcast over websockets, where would also retrieve the updated record.
 								// We still put the updated record we receive here into the cache to ensure early consistency.
 								if( result.data[ entityName ] ) {
-									var newEntity = fromJson( result.data[ entityName ] );
+									var newEntity = cacheService.fromJson( result.data[ entityName ] );
 									updateCacheWithEntity( newEntity );
 								}
 							},
@@ -236,7 +237,7 @@ var absync;
 								// broadcast over websockets, where would also retrieve the updated record.
 								// We still put the updated record we receive here into the cache to ensure early consistency.
 								if( result.data[ entityName ] ) {
-									var newEntity = fromJson( result.data[ entityName ] );
+									var newEntity = cacheService.fromJson( result.data[ entityName ] );
 									updateCacheWithEntity( newEntity );
 								}
 							},
@@ -458,7 +459,7 @@ var absync;
 						$log.info( "Entity was deleted from the server. Updating cache..." );
 						removeEntityFromCache( entityReceived.id );
 					} else {
-						updateCacheWithEntity( fromJson( entityReceived ) );
+						updateCacheWithEntity( cacheService.fromJson( entityReceived ) );
 					}
 				} );
 				$rootScope.$on( collectionName, function( event, args ) {
@@ -470,7 +471,7 @@ var absync;
 					}
 
 					collectionReceived.forEach( function addEntityToCache( entityReceived ) {
-						updateCacheWithEntity( fromJson( entityReceived ) );
+						updateCacheWithEntity( cacheService.fromJson( entityReceived ) );
 					} )
 				} );
 
