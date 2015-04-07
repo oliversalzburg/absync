@@ -116,6 +116,7 @@ var absync;
 
 			function wrapper( $q, $rootScope, $http, $log, absync ) {
 				var cacheService = this;
+				$log.info( "absync service for '" + collectionName + "' was instantiated." );
 
 				cacheService.name = collectionName;
 
