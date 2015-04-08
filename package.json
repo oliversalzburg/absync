@@ -1,6 +1,6 @@
 {
   "name": "absync",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "absync",
   "main": "index.js",
   "scripts": {
@@ -17,10 +17,10 @@
   },
   "homepage": "https://github.com/oliversalzburg/absync",
   "dependencies": {
-    "fm-log": "0.8.0",
-    "lodash": "3.3.0",
-    "mongoose": "3.8.23",
-    "mongoose-schema-extend": "0.1.7",
-    "socket.io": "1.3.4"
+    "fm-log": "~0.8.0",
+    "lodash": "~3.3.0",
+    "mongoose": "~3.8.23",
+    "mongoose-schema-extend": "~0.1.7",
+    "socket.io": "~1.3.4"
   }
 }
