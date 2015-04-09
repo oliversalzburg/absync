@@ -34,6 +34,7 @@ var absync;
 				angular.forEach( registerLater, function registerListener( listener ) {
 					handleEntityEvent( listener.eventName, listener.callback, listener.rootScope );
 				} );
+				registerLater = [];
 			}
 		}
 
