@@ -158,7 +158,8 @@ var absync;
 
 				cacheService.dataAvailable
 					.then( function( rawData ) {
-						cacheService.entityCache = cacheService.entityCache || [];
+						// Drop all existing data when receiving a full collection
+						cacheService.entityCache = [];
 						rawData[ collectionName ].forEach( function( rawEntity ) {
 							cacheService.entityCache.push( cacheService.fromJson( rawEntity ) );
 						} );
