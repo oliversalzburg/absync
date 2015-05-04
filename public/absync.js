@@ -1,5 +1,4 @@
-var absync;
-(function( _absync, undefined ) {
+(function( undefined ) {
 	"use strict";
 
 	/**
@@ -178,7 +177,7 @@ var absync;
 		return absyncCacheServiceFactory;
 
 		/* @ngInject */
-		function absyncCacheServiceFactory( $http, $injector, $log, $q, $rootScope,  absync ) {
+		function absyncCacheServiceFactory( $http, $injector, $log, $q, $rootScope, absync ) {
 			var cacheService = this;
 			$log.info( "absync service for '" + configuration.collectionName + "' was instantiated." );
 
@@ -203,7 +202,8 @@ var absync;
 			cacheService.objectsAvailable = cacheService.objectsAvailableDeferred.promise;
 
 			cacheService.httpInterface = $http;
-			cacheService.fromJson = deserializeModel;
+			cacheService.serializer = serializeModel;
+			cacheService.deserializer = deserializeModel;
 
 			cacheService.ensureLoaded = function( forceReload ) {
 				forceReload = (forceReload === true);
@@ -233,7 +233,7 @@ var absync;
 				.then( function( rawData ) {
 					cacheService.entityCache = cacheService.entityCache || [];
 					rawData[ configuration.collectionName ].forEach( function( rawEntity ) {
-						cacheService.entityCache.push( cacheService.fromJson( rawEntity ) );
+						cacheService.entityCache.push( cacheService.deserializer( rawEntity ) );
 					} );
 					cacheService.objectsAvailableDeferred.resolve( cacheService.entityCache );
 					$rootScope.$broadcast( "collectionNew", {
@@ -268,7 +268,7 @@ var absync;
 						return deferred.promise;
 					}
 
-					var entity = cacheService.fromJson( data[ configuration.entityName ] );
+					var entity = cacheService.deserializer( data[ configuration.entityName ] );
 					updateCacheWithEntity( entity );
 					deferred.resolve( entity );
 				}
@@ -283,9 +283,12 @@ var absync;
 			cacheService.update = function( entity ) {
 				var promise;
 
+				var reduced = cacheService.reduceComplex( entity );
+				var serialized = cacheService.serializer( reduced );
+
 				// Wrap entity in a new object, with a single property, named after the entity type.
 				var wrapper = {};
-				wrapper[ configuration.entityName ] = cacheService.reduceComplex( entity );
+				wrapper[ configuration.entityName ] = serialized;
 
 				if( "undefined" !== typeof( entity.id ) ) {
 					promise = cacheService.httpInterface.put( configuration.entityUri + "/" + entity.id, wrapper );
@@ -295,7 +298,7 @@ var absync;
 							// broadcast over websockets, where would also retrieve the updated record.
 							// We still put the updated record we receive here into the cache to ensure early consistency.
 							if( result.data[ configuration.entityName ] ) {
-								var newEntity = cacheService.fromJson( result.data[ configuration.entityName ] );
+								var newEntity = cacheService.deserializer( result.data[ configuration.entityName ] );
 								updateCacheWithEntity( newEntity );
 							}
 						},
@@ -312,7 +315,7 @@ var absync;
 							// broadcast over websockets, where would also retrieve the updated record.
 							// We still put the updated record we receive here into the cache to ensure early consistency.
 							if( result.data[ configuration.entityName ] ) {
-								var newEntity = cacheService.fromJson( result.data[ configuration.entityName ] );
+								var newEntity = cacheService.deserializer( result.data[ configuration.entityName ] );
 								updateCacheWithEntity( newEntity );
 							}
 						},
@@ -534,7 +537,7 @@ var absync;
 					$log.info( "Entity was deleted from the server. Updating cache..." );
 					removeEntityFromCache( entityReceived.id );
 				} else {
-					updateCacheWithEntity( cacheService.fromJson( entityReceived ) );
+					updateCacheWithEntity( cacheService.deserializer( entityReceived ) );
 				}
 			} );
 			$rootScope.$on( configuration.collectionName, function( event, args ) {
@@ -546,7 +549,7 @@ var absync;
 				}
 
 				collectionReceived.forEach( function addEntityToCache( entityReceived ) {
-					updateCacheWithEntity( cacheService.fromJson( entityReceived ) );
+					updateCacheWithEntity( cacheService.deserializer( entityReceived ) );
 				} );
 			} );
 
@@ -558,13 +561,6 @@ var absync;
 				$rootScope.$broadcast( configuration.collectionName, message[ configuration.collectionName ] );
 			} );
 
-			/*
-			if( then ) {
-				// Use setTimeout to break possible dependency loops when "then" references the caching service that we just constructed.
-				setTimeout( then );
-			}
-			*/
-
 			return cacheService;
 		}
 	}
@@ -573,38 +569,4 @@ var absync;
 		return model;
 	}
 
-	/**
-	 * Constructs a new caching module for a certain entity and the collection thereof.
-	 * The result will be an Angular service which caches the collection and makes sure it stays in sync with the backend.
-	 * The collection name and entity name must be used in the whole codebase when referring to these entities and the collection.
-	 * For example, for the "person" record, the module would listen for "person" events broadcasted on the root scope. It will expect those messages
-	 * to include a Person instance which should be put into the cache.
-	 * @param {String} collectionName The name of the data collection. This will also be the name of the generated Angular service.
-	 * When an API endpoint returns the connected collection, the returned JSON object is expected to contain the collection within a member of this name.
-	 * @param {String} entityName The name of a single entity inside the collection.
-	 * When an API endpoint returns a member of the collection, the returned JSON object is expected to contain the entity within a member of this name.
-	 * @param {String} entityUri The URI from which a single entity of the collection can be retrieved.
-	 * @param {String} collectionUri The URI from which the collection can be retrieved.
-	 * @param {Function} [fromJson] A function that can convert a JSON instance of one member of the collection into a proper object.
-	 */
-	_absync.CacheServiceFactory = function cache( collectionName, entityName, collectionUri, entityUri, fromJson ) {
-
-		var builder = {};
-
-
-
-
-		/**
-		 * Force construction of Angular service.
-		 */
-		builder.assembleNow = function() {
-			angular.element( document ).ready( forceConstruction );
-			function forceConstruction() {
-				var injector = angular.element( document.body ).injector();
-				injector.invoke( [ collectionName, angular.noop ] );
-			}
-		};
-
-		return builder;
-	};
-}( absync || (absync = {}) ));
+}());
