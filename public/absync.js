@@ -60,9 +60,6 @@ var absync;
 
 			// Register the service configuration.
 			_absyncProvider.__collections[ name ] = absyncCacheServiceFactoryFactory( name, configuration );
-			;
-			_absyncProvider.__collections[ name ].configuration = configuration;
-			_absyncProvider.__collections[ name ].isConstructed = false;
 
 			// Register the new service.
 			$provide
@@ -192,6 +189,7 @@ var absync;
 			}
 			var _model = _injector.get( configuration.model );
 
+			var serializeModel = _model.serialize || configuration.serialize || serializationNoop;
 			var deserializeModel = _model.deserialize || configuration.deserialize || serializationNoop;
 
 			cacheService.name = configuration.collectionName;
