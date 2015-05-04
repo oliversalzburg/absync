@@ -50,7 +50,9 @@ function buildJs() {
 		// Pull out files which haven't changed since our last build iteration and put them back into the stream.
 		.pipe( remember( path.join( config.Output.Production, config.Output.DirectoryNames.Scripts ) ) )
 		// Concatenate all files into a single one.
-		.pipe( concat( slug( application.name ) + ".js", { newLine : ";" } ) )
+		.pipe( concat( slug( application.name ) + ".concat.js", { newLine : ";" } ) )
+		// Put that file into the development output as well.
+		.pipe( gulp.dest( path.join( config.Output.Development, config.Output.DirectoryNames.Scripts ) ) )
 		// Minify the file.
 		.pipe( uglify() )
 		// Rename it to indicate minification.

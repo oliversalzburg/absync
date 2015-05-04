@@ -13,9 +13,9 @@ var absync;
 
 	angular
 		.module( "absync" )
-		.provider( "absync", absyncProvider );
+		.provider( "absync", getAbsyncProvider );
 
-	function absyncProvider() {
+	function getAbsyncProvider() {
 		var _absyncProvider = this;
 
 		_absyncProvider.__ioSocket = null;
@@ -27,7 +27,28 @@ var absync;
 		_absyncProvider.__collections = {};
 
 		// Register the configurator on the provider itself to allow early configuration during setup phase.
-		_absyncProvider.configure = AbsyncService.prototype.configure;
+		_absyncProvider.configure = function AbsyncProvider$configure( configuration ) {
+			var socket = configuration.socket || configuration;
+			if( typeof socket == "function" ) {
+				// Assume io
+				_absyncProvider.__ioSocket = socket();
+
+			} else if( io && io.Socket && socket instanceof io.Socket ) {
+				// Assume io.Socket
+				_absyncProvider.__ioSocket = socket;
+
+			} else {
+				throw new Error( "configure() expects input to be a function or a socket.io Socket instance." );
+			}
+
+			// Check if services already tried to register listeners, if so, register them now.
+			if( _absyncProvider.__registerLater.length ) {
+				angular.forEach( _absyncProvider.__registerLater, function registerListener( listener ) {
+					this.__handleEntityEvent( listener.eventName, listener.callback, listener.rootScope );
+				} );
+				_absyncProvider.__registerLater = [];
+			}
+		};
 
 		// Request a new synchronized collection.
 		// This only registers the intent to use that collection. It will be constructed when it is first used.
@@ -46,110 +67,103 @@ var absync;
 
 		// Register the service factory.
 		_absyncProvider.$get = function absyncProvider$$get( $rootScope ) {
-			return new AbsyncService( $rootScope );
+			return new AbsyncService( this, $rootScope );
 		};
 		_absyncProvider.$get.$inject = [ "$rootScope" ];
+	}
 
+	/**
+	 * The service that is received when injecting "absync".
+	 * This service is primarily used internally to set up the connection between socket.io and the individual
+	 * caching services.
+	 * @param {Object} parentProvider The AbsyncProvider that provides this service.
+	 * @param {Object} rootScope The Angular root scope.
+	 * @constructor
+	 */
+	function AbsyncService( parentProvider, rootScope ) {
+		this.__absyncProvider = parentProvider;
+		this.__rootScope = rootScope;
+	}
 
-		// The service that is received when injecting "absync".
-		// This service is primarily used internally to set up the connection between socket.io and the individual
-		// caching services.
-		function AbsyncService( rootScope ) {
-			this.__rootScope = rootScope;
+	/**
+	 * Configure the socket.io connection for absync.
+	 * @param configuration
+	 */
+	AbsyncService.prototype.configure = function AbsyncService$configure( configuration ) {
+		var _absyncProvider = this.__absyncProvider;
+		_absyncProvider.configure( configuration );
+	};
+
+	/**
+	 * Register an event listener that is called when a specific entity is received on the websocket.
+	 * @param eventName
+	 * @param callback
+	 */
+	AbsyncService.prototype.on = function AbsyncService$on( eventName, callback ) {
+		var _absyncProvider = this.__absyncProvider;
+
+		if( !_absyncProvider.__ioSocket ) {
+			_absyncProvider.__registerLater.push( {
+				eventName : eventName,
+				callback  : callback,
+				rootScope : _absyncProvider.__rootScope
+			} );
+			return;
 		}
 
-		/**
-		 * Configure the socket.io connection for absync.
-		 * @param configuration
-		 */
-		AbsyncService.prototype.configure = function AbsyncService$configure( configuration ) {
-			var socket = configuration.socket || configuration;
-			if( typeof socket == "function" ) {
-				// Assume io
-				_absyncProvider.__ioSocket = socket();
+		this.__handleEntityEvent( eventName, callback, _absyncProvider.__rootScope );
+	};
 
-			} else if( io && io.Socket && socket instanceof io.Socket ) {
-				// Assume io.Socket
-				_absyncProvider.__ioSocket = socket;
+	/**
+	 * Convenience method to allow the user to emit() from the websocket.
+	 * This is not utilized in absync internally.
+	 * @param eventName
+	 * @param data
+	 * @param callback
+	 */
+	AbsyncService.prototype.emit = function AbsyncService$emit( eventName, data, callback ) {
+		var _absyncProvider = this.__absyncProvider;
 
-			} else {
-				throw new Error( "configure() expects input to be a function or a socket.io Socket instance." );
-			}
+		if( !_absyncProvider.ioSocket ) {
+			throw new Error( "socket.io is not initialized." );
+		}
 
-			// Check if services already tried to register listeners, if so, register them now.
-			if( _absyncProvider.__registerLater.length ) {
-				angular.forEach( _absyncProvider.__registerLater, function registerListener( listener ) {
-					handleEntityEvent( listener.eventName, listener.callback, listener.rootScope );
-				} );
-				_absyncProvider.__registerLater = [];
-			}
-		};
+		var _rootScope = this.rootScope;
 
-		/**
-		 * Register an event listener that is called when a specific entity is received on the websocket.
-		 * @param eventName
-		 * @param callback
-		 */
-		AbsyncService.prototype.on = function AbsyncService$on( eventName, callback ) {
-			if( !_absyncProvider.__ioSocket ) {
-				_absyncProvider.__registerLater.push( {
-					eventName : eventName,
-					callback  : callback,
-					rootScope : _absyncProvider.__rootScope
-				} );
-				return;
-			}
+		_absyncProvider.__ioSocket.emit( eventName, data, function afterEmit() {
+			var args = arguments;
+			_rootScope.$apply( function() {
+				if( callback ) {
+					callback.apply( _absyncProvider.ioSocket, args );
+				}
+			} );
+		} );
+	};
 
-			handleEntityEvent( eventName, callback, _absyncProvider.__rootScope );
-		};
+	/**
+	 * Handle receiving an entity on the websocket connection.
+	 * @param eventName
+	 * @param callback
+	 * @param rootScope
+	 * @returns {Function}
+	 */
+	AbsyncService.prototype.__handleEntityEvent = function AbsyncService$__handleEntityEvent( eventName, callback, rootScope ) {
+		var _absyncProvider = this.__absyncProvider;
 
-		/**
-		 * Convenience method to allow the user to emit() from the websocket.
-		 * This is not utilized in absync internally.
-		 * @param eventName
-		 * @param data
-		 * @param callback
-		 */
-		AbsyncService.prototype.emit = function AbsyncService$emit( eventName, data, callback ) {
-			if( !_absyncProvider.ioSocket ) {
-				throw new Error( "socket.io is not initialized." );
-			}
-
-			var _rootScope = this.rootScope;
-
-			_absyncProvider.__ioSocket.emit( eventName, data, function afterEmit() {
-				var args = arguments;
-				_rootScope.$apply( function() {
-					if( callback ) {
-						callback.apply( _absyncProvider.ioSocket, args );
-					}
-				} );
+		var wrapper = function() {
+			var args = arguments;
+			rootScope.$apply( function() {
+				callback.apply( ioSocket, args );
 			} );
 		};
+		_absyncProvider.__ioSocket.on( eventName, wrapper );
 
-		/**
-		 * Handle receiving an entity on the websocket connection.
-		 * @param eventName
-		 * @param callback
-		 * @param rootScope
-		 * @returns {Function}
-		 */
-		function handleEntityEvent( eventName, callback, rootScope ) {
-			var wrapper = function() {
-				var args = arguments;
-				rootScope.$apply( function() {
-					callback.apply( ioSocket, args );
-				} );
-			};
-			_absyncProvider.__ioSocket.on( eventName, wrapper );
-
-			// Return a function that removes the listener.
-			// TODO: This is not currently utilized due to the delayed listener registration approach.
-			return function removeListener() {
-				_absyncProvider.__ioSocket.removeListener( eventName, wrapper );
-			};
-		}
-	}
+		// Return a function that removes the listener.
+		// TODO: This is not currently utilized due to the delayed listener registration approach.
+		return function removeListener() {
+			_absyncProvider.__ioSocket.removeListener( eventName, wrapper );
+		};
+	};
 
 	/**
 	 * Constructs a new caching module for a certain entity and the collection thereof.
