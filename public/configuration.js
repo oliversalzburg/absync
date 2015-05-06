@@ -35,7 +35,7 @@
 		this.collectionUri = collectionUri;
 		this.entityUri = entityUri;
 
-		var _modelName = model.prototype.toString().toLowerCase();
+		var _modelName = model.prototype.constructor.name.toLowerCase();
 		this.collectionName = collectionName || ( _modelName + "s" );
 		this.entityName = entityName || _modelName;
 
