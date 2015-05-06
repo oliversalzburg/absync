@@ -515,42 +515,50 @@
 		 * @param {Object} entity
 		 */
 		CacheService.prototype.delete = function CacheService$delete( entity ) {
-			var deferred = $q.defer();
+			var _cacheService = this;
 
 			var entityId = entity.id;
-			cacheService.httpInterface.delete( configuration.entityUri + "/" + entityId )
-				.success( function( data, status, headers, config ) {
-					removeEntityFromCache( entityId );
-					deferred.resolve();
-				} )
-				.error( function( data, status, headers, config ) {
-					$log.error( data );
-					deferred.reject( new Error( "Unable to delete entity." ) );
-				} );
+			return _cacheService.httpInterface
+				.delete( configuration.entityUri + "/" + entityId )
+				.success( onEntityDeleted )
+				.error( onEntityDeletionFailed );
 
-			return deferred.promise;
+			function onEntityDeleted() {
+				return _cacheService.__removeEntityFromCache( entityId );
+			}
+
+			function onEntityDeletionFailed( data, status, headers, config ) {
+				_cacheService.logInterface.error( data );
+				throw new Error( "Unable to delete entity." );
+			}
 		};
 
 		/**
 		 * Put an entity into the cache or update the existing record if the entity was already in the cache.
 		 * @param {Object} entityToCache
+		 * @private
 		 */
 		CacheService.prototype.__updateCacheWithEntity = function CacheService$__updateCacheWithEntity( entityToCache ) {
-			$log.info( "Updating entity in cache..." );
+			var _cacheService = this;
+
+			_cacheService.logInterface.info( "Updating entity in cache…" );
+
 			var found = false;
-			for( var entityIndex = 0, entity = cacheService.entityCache[ 0 ], cacheSize = cacheService.entityCache.length;
-			     entityIndex < cacheSize;
-			     ++entityIndex, entity = cacheService.entityCache[ entityIndex ] ) {
+			for( var entityIndex = 0, entity = _cacheService.entityCache[ 0 ];
+			     entityIndex < _cacheService.entityCache.length;
+			     ++entityIndex, entity = _cacheService.entityCache[ entityIndex ] ) {
 				if( entity.id == entityToCache.id ) {
-					$rootScope.$broadcast( "beforeEntityUpdated",
+					// Allow the user to intervene in the update process, before updating the entity.
+					_cacheService.scope.$broadcast( "beforeEntityUpdated",
 						{
-							service : cacheService,
-							cache   : cacheService.entityCache,
-							entity  : cacheService.entityCache[ entityIndex ],
+							service : _cacheService,
+							cache   : _cacheService.entityCache,
+							entity  : _cacheService.entityCache[ entityIndex ],
 							updated : entityToCache
 						} );
+
 					// Use the "copyFrom" method on the entity, if it exists, otherwise use naive approach.
-					var targetEntity = cacheService.entityCache[ entityIndex ];
+					var targetEntity = _cacheService.entityCache[ entityIndex ];
 					if( targetEntity.copyFrom ) {
 						targetEntity.copyFrom( entityToCache );
 					} else {
@@ -558,11 +566,13 @@
 					}
 
 					found = true;
-					$rootScope.$broadcast( "entityUpdated",
+
+					// After updating the entity, send another event to allow the user to react.
+					_cacheService.scope.$broadcast( "entityUpdated",
 						{
-							service : cacheService,
-							cache   : cacheService.entityCache,
-							entity  : cacheService.entityCache[ entityIndex ]
+							service : _cacheService,
+							cache   : _cacheService.entityCache,
+							entity  : _cacheService.entityCache[ entityIndex ]
 						} );
 					break;
 				}
@@ -570,10 +580,10 @@
 
 			// If the entity wasn't found in our records, it's a new entity.
 			if( !found ) {
-				cacheService.entityCache.push( entityToCache );
-				$rootScope.$broadcast( "entityNew", {
-					service : cacheService,
-					cache   : cacheService.entityCache,
+				_cacheService.entityCache.push( entityToCache );
+				_cacheService.scope.$broadcast( "entityNew", {
+					service : _cacheService,
+					cache   : _cacheService.entityCache,
 					entity  : entityToCache
 				} );
 			}
@@ -582,21 +592,29 @@
 		/**
 		 * Removes an entity from the internal cache. The entity is not removed from the backend.
 		 * @param {String} id The ID of the entity to remove from the cache.
+		 * @private
 		 */
 		CacheService.prototype.__removeEntityFromCache = function CacheService$__removeEntityFromCache( id ) {
-			for( var entityIndex = 0, entity = cacheService.entityCache[ 0 ], cacheSize = cacheService.entityCache.length;
-			     entityIndex < cacheSize;
-			     ++entityIndex, entity = cacheService.entityCache[ entityIndex ] ) {
+			var _cacheService = this;
+
+			for( var entityIndex = 0, entity = _cacheService.entityCache[ 0 ];
+			     entityIndex < _cacheService.entityCache.length;
+			     ++entityIndex, entity = _cacheService.entityCache[ entityIndex ] ) {
 				if( entity.id == id ) {
-					$rootScope.$broadcast( "beforeEntityRemoved", {
-						service : cacheService,
-						cache   : cacheService.entityCache,
+					// Before removing the entity, allow the user to react.
+					_cacheService.scope.$broadcast( "beforeEntityRemoved", {
+						service : _cacheService,
+						cache   : _cacheService.entityCache,
 						entity  : entity
 					} );
-					cacheService.entityCache.splice( entityIndex, 1 );
-					$rootScope.$broadcast( "entityRemoved", {
-						service : cacheService,
-						cache   : cacheService.entityCache,
+
+					// Remove the entity from the cache.
+					_cacheService.entityCache.splice( entityIndex, 1 );
+
+					// Send another event to allow the user to take note of the removal.
+					_cacheService.scope.$broadcast( "entityRemoved", {
+						service : _cacheService,
+						cache   : _cacheService.entityCache,
 						entity  : entity
 					} );
 					break;
@@ -606,13 +624,18 @@
 
 		/**
 		 * Retrieve an associative array of all cached entities, which uses the ID of the entity records as the key in the array.
-		 * @returns {Array}
+		 * This is a convenience method that is not utilized internally.
+		 * @returns {Array<configuration.model>}
 		 */
 		CacheService.prototype.lookupTableById = function CacheService$lookupTableById() {
+			var _cacheService = this;
+
 			//TODO: Keep a copy of the lookup table and only update it when the cached data updates
 			var lookupTable = [];
-			for( var entityIndex = 0, cacheSize = cacheService.entityCache.length; entityIndex < cacheSize; ++entityIndex ) {
-				lookupTable[ cacheService.entityCache[ entityIndex ].id ] = cacheService.entityCache[ entityIndex ];
+			for( var entityIndex = 0;
+			     entityIndex < _cacheService.entityCache.length;
+			     ++entityIndex ) {
+				lookupTable[ _cacheService.entityCache[ entityIndex ].id ] = _cacheService.entityCache[ entityIndex ];
 			}
 			return lookupTable;
 		};
@@ -625,6 +648,8 @@
 		 * @returns {Object|Array} A copy of the input entity, with complex type instances replaced with their respective ID.
 		 */
 		CacheService.prototype.reduceComplex = function CacheService$reduceComplex( entity, arrayInsteadOfObject ) {
+			var _cacheService = this;
+
 			var result = arrayInsteadOfObject ? [] : {};
 			for( var propertyName in entity ) {
 				if( !entity.hasOwnProperty( propertyName ) ) {
@@ -633,7 +658,7 @@
 
 				// Recurse for nested arrays.
 				if( Array.isArray( entity[ propertyName ] ) ) {
-					result[ propertyName ] = cacheService.reduceComplex( entity[ propertyName ], true );
+					result[ propertyName ] = _cacheService.reduceComplex( entity[ propertyName ], true );
 					continue;
 				}
 
@@ -660,30 +685,15 @@
 		 * @returns {Promise}
 		 */
 		CacheService.prototype.populateComplex = function CacheService$populateComplex( entity, propertyName, cache, force ) {
+			var _cacheService = this;
+
 			// If the target property is an array, ...
 			if( Array.isArray( entity[ propertyName ] ) ) {
 				// ...map the elements in the array to promises.
-				var promises = entity[ propertyName ].map( function mapElementToPromise( element, index ) {
-					// We usually assume the properties to be strings (the ID of the referenced complex).
-					if( typeof entity[ propertyName ][ index ] !== "string" ) {
-						// If "force" is enabled, we check if this non-string property is an object and has an "id" member, which is a string.
-						if( force && typeof entity[ propertyName ][ index ] === "object" && typeof entity[ propertyName ][ index ].id === "string" ) {
-							// If that is true, then we replace the whole object with the ID and continue as usual.
-							entity[ propertyName ][ index ] = entity[ propertyName ][ index ].id;
-						} else {
-							return $q.when( false );
-						}
-					}
+				var promises = entity[ propertyName ].map( mapElementToPromise );
 
-					// Treat the property as an ID and read the complex with that ID from the cache.
-					return cache.read( entity[ propertyName ][ index ] )
-						.then( function onComplexRetrieved( complex ) {
-							// When the complex was retrieved, store it back into the array.
-							entity[ propertyName ][ index ] = complex;
-						} )
-				} );
+				return _cacheService.q.all( promises );
 
-				return $q.all( promises );
 			} else {
 				// We usually assume the properties to be strings (the ID of the referenced complex).
 				if( typeof entity[ propertyName ] !== "string" ) {
@@ -691,17 +701,43 @@
 					if( force && typeof entity[ propertyName ] === "object" && typeof entity[ propertyName ].id === "string" ) {
 						// If that is true, then we replace the whole object with the ID and continue as usual.
 						entity[ propertyName ] = entity[ propertyName ].id;
+
 					} else {
-						return $q.when( false );
+						return _cacheService.q.when( false );
 					}
 				}
 
 				// Treat the property as an ID and read the complex with that ID from the cache.
 				return cache.read( entity[ propertyName ] )
-					.then( function onComplexRetrieved( complex ) {
-						// When the complex was retrieved, store it back into the entity.
-						entity[ propertyName ] = complex;
-					} );
+					.then( onComplexRetrieved );
+			}
+
+			function mapElementToPromise( element, index ) {
+				// We usually assume the properties to be strings (the ID of the referenced complex).
+				if( typeof entity[ propertyName ][ index ] !== "string" ) {
+					// If "force" is enabled, we check if this non-string property is an object and has an "id" member, which is a string.
+					if( force && typeof entity[ propertyName ][ index ] === "object" && typeof entity[ propertyName ][ index ].id === "string" ) {
+						// If that is true, then we replace the whole object with the ID and continue as usual.
+						entity[ propertyName ][ index ] = entity[ propertyName ][ index ].id;
+
+					} else {
+						return _cacheService.q.when( false );
+					}
+				}
+
+				// Treat the property as an ID and read the complex with that ID from the cache.
+				return cache.read( entity[ propertyName ][ index ] )
+					.then( onComplexRetrieved );
+
+				function onComplexRetrieved( complex ) {
+					// When the complex was retrieved, store it back into the array.
+					entity[ propertyName ][ index ] = complex;
+				}
+			}
+
+			function onComplexRetrieved( complex ) {
+				// When the complex was retrieved, store it back into the entity.
+				entity[ propertyName ] = complex;
 			}
 		};
 
