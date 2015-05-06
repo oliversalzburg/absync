@@ -71,7 +71,9 @@
 		_absyncProvider.$get = function absyncProvider$$get( $rootScope ) {
 			return new AbsyncService( this, $rootScope );
 		};
+		_absyncProvider.$get.$inject = ["$rootScope"];
 	}
+	getAbsyncProvider.$inject = ["$provide"];
 
 	/**
 	 * The service that is received when injecting "absync".
@@ -248,6 +250,7 @@
 			_cacheService.dataAvailable
 				.then( _cacheService.__onDataAvailable.bind( _cacheService ) );
 		}
+		CacheService.$inject = ["$http", "$injector", "$log", "$q", "$rootScope", "absync"];
 
 		/**
 		 * Invoked when an entity is received on a websocket.

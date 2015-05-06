@@ -85,10 +85,28 @@ One of the key concepts of absync is that model properties can be decorated with
 3. Construct caching services in Angular to hold the data:
 
 	```js
-	var deviceService = absync.CacheServiceFactory( "device", "device", "/api/devices", "/api/device", Device.fromJson );
-	deviceService.assemble();
-	```
+	angular
+		.module( "devices" )
+		.config( registerDevicesService )
+		.run( configureService );
 
-	`Device.fromJson` is supposed to be a function that transforms incoming entities before they are put into the cache. 
+	/* @ngInject */
+	function registerDevicesService( absyncProvider ) {
+		absyncProvider.collection( "devices",
+			{
+				model          : "Device",
+				collectionName : "devices",
+				collectionUri  : "/api/devices",
+				entityName     : "device",
+				entityUri      : "/api/device"
+			}
+		);
+	}
+
+	/* @ngInject */
+	function configureService( devices ) {
+		// Do something with your absync service
+	}
+	```
 
 	Services emit `entityNew` and `entityUpdated` events. The data is contained in their `entityCache` member.
