@@ -170,7 +170,7 @@
 	/**
 	 * This factory serves as a closure to make the configuration available to the cache service.
 	 * @param {String} name The name of the service.
-	 * @param {Object} configuration The configuration for this service.
+	 * @param {AbsyncServiceConfiguration} configuration The configuration for this service.
 	 * @returns {CacheService}
 	 */
 	function absyncCacheServiceFactory( name, configuration ) {
@@ -184,7 +184,7 @@
 		 * @ngInject
 		 */
 		function CacheService( $http, $injector, $log, $q, $rootScope, absync ) {
-			var cacheService = this;
+			var _cacheService = this;
 			$log.info( "absync service '" + name + "' was instantiated." );
 
 			// Retrieve a reference to the model of the collection that is being cached.
@@ -200,26 +200,27 @@
 			var deserializeModel = _model.deserialize || configuration.deserialize || serializationNoop;
 
 			// Store configuration.
-			cacheService.name = name;
-			cacheService.configuration = configuration;
+			_cacheService.name = name;
+			_cacheService.configuration = configuration;
 
 			// The entity cache must be constructed as an empty array, to allow the user to place watchers on it.
 			// We must never replace the cache with a new array, we must always manipulate the existing one.
 			// Otherwise watchers will not behave as the user expects them to.
-			cacheService.entityCache = [];
+			/* @type {Array<configuration.model>} */
+			_cacheService.entityCache = [];
 			// The raw cache is data that hasn't been deserialized and is used internally.
-			cacheService.__entityCacheRaw = null;
+			_cacheService.__entityCacheRaw = null;
 
 			//TODO: Continue code review
 
-			cacheService.dataAvailableDeferred = cacheService.dataAvailableDeferred || $q.defer();
-			cacheService.objectsAvailableDeferred = cacheService.objectsAvailableDeferred || $q.defer();
-			cacheService.dataAvailable = cacheService.dataAvailableDeferred.promise;
-			cacheService.objectsAvailable = cacheService.objectsAvailableDeferred.promise;
+			_cacheService.dataAvailableDeferred = _cacheService.dataAvailableDeferred || $q.defer();
+			_cacheService.objectsAvailableDeferred = _cacheService.objectsAvailableDeferred || $q.defer();
+			_cacheService.dataAvailable = _cacheService.dataAvailableDeferred.promise;
+			_cacheService.objectsAvailable = _cacheService.objectsAvailableDeferred.promise;
 
-			cacheService.httpInterface = $http;
-			cacheService.serializer = serializeModel;
-			cacheService.deserializer = deserializeModel;
+			_cacheService.httpInterface = $http;
+			_cacheService.serializer = serializeModel;
+			_cacheService.deserializer = deserializeModel;
 
 			// Listen for entity broadcasts. These are sent when a record is received through a websocket.
 			$rootScope.$on( configuration.entityName, function( event, args ) {
@@ -269,6 +270,12 @@
 				} );
 		}
 
+		/**
+		 * Ensure that the cached collection is retrieved from the server.
+		 * @param {Boolean} forceReload Should the data be loaded, even if the service already has a local cache?
+		 * @returns {Promise<Array<configuration.model>>}
+		 * @constructor
+		 */
 		CacheService.prototype.ensureLoaded = function CacheService$ensureLoaded( forceReload ) {
 			forceReload = (forceReload === true);
 			if( null === cacheService.entityCacheRaw || forceReload ) {
@@ -289,15 +296,21 @@
 					} );
 			}
 
-			return $q.all( [ cacheService.dataAvailable,
-				cacheService.objectsAvailable ] );
+			return $q.all(
+				[
+					cacheService.dataAvailable,
+					cacheService.objectsAvailable
+				] )
+				.then( function dataAvailable() {
+					return cacheService.entityCache;
+				} );
 		};
 
 
 		/**
 		 * Read a single entity from the cache, or load it from the server if required.
 		 * @param {String} id The ID of the entity to retrieve.
-		 * @returns {Promise<Model>}
+		 * @returns {Promise<configuration.model>}
 		 */
 		CacheService.prototype.read = function CacheService$read( id ) {
 			var deferred = $q.defer();
