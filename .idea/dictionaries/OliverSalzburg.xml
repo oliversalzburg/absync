@@ -2,9 +2,12 @@
   <dictionary name="OliverSalzburg">
     <words>
       <w>absync</w>
+      <w>deferreds</w>
+      <w>deserialized</w>
       <w>typefactory</w>
       <w>typehelper</w>
       <w>typeinfo</w>
+      <w>websocket</w>
     </words>
   </dictionary>
 </component>
