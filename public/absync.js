@@ -78,12 +78,12 @@
 	 * This service is primarily used internally to set up the connection between socket.io and the individual
 	 * caching services.
 	 * @param {Object} parentProvider The AbsyncProvider that provides this service.
-	 * @param {Object} rootScope The Angular root scope.
+	 * @param {Object} scope The Angular scope to use (usually the root scope).
 	 * @constructor
 	 */
-	function AbsyncService( parentProvider, rootScope ) {
+	function AbsyncService( parentProvider, scope ) {
 		this.__absyncProvider = parentProvider;
-		this.__rootScope = rootScope;
+		this.__scope = scope;
 	}
 
 	/**
@@ -97,8 +97,8 @@
 
 	/**
 	 * Register an event listener that is called when a specific entity is received on the websocket.
-	 * @param eventName
-	 * @param callback
+	 * @param {String} eventName
+	 * @param {Function} callback
 	 */
 	AbsyncService.prototype.on = function AbsyncService$on( eventName, callback ) {
 		var _absyncProvider = this.__absyncProvider;
@@ -108,25 +108,25 @@
 			_absyncProvider.__registerLater.push( {
 				eventName : eventName,
 				callback  : callback,
-				rootScope : _absyncProvider.__rootScope
+				rootScope : _absyncProvider.__scope
 			} );
 			return;
 		}
 
-		this.__handleEntityEvent( eventName, callback, _absyncService.__rootScope );
+		_absyncService.__handleEntityEvent( eventName, callback, _absyncService.__scope );
 	};
 
 	/**
 	 * Convenience method to allow the user to emit() from the websocket.
 	 * This is not utilized in absync internally.
-	 * @param eventName
-	 * @param data
-	 * @param callback
+	 * @param {String} eventName
+	 * @param {*} data
+	 * @param {Function} callback
 	 */
 	AbsyncService.prototype.emit = function AbsyncService$emit( eventName, data, callback ) {
 		var _absyncProvider = this.__absyncProvider;
 
-		if( !_absyncProvider.ioSocket ) {
+		if( !_absyncProvider.__ioSocket ) {
 			throw new Error( "socket.io is not initialized." );
 		}
 
@@ -136,25 +136,25 @@
 			var args = arguments;
 			_rootScope.$apply( function() {
 				if( callback ) {
-					callback.apply( _absyncProvider.ioSocket, args );
+					callback.apply( _absyncProvider.__ioSocket, args );
 				}
 			} );
 		} );
 	};
 
 	/**
-	 * Handle receiving an entity on the websocket connection.
-	 * @param eventName
-	 * @param callback
-	 * @param rootScope
+	 * Register an event listener on the websocket.
+	 * @param {String} eventName
+	 * @param {Function} callback
+	 * @param {Object} scope
 	 * @returns {Function}
 	 */
-	AbsyncService.prototype.__handleEntityEvent = function AbsyncService$__handleEntityEvent( eventName, callback, rootScope ) {
+	AbsyncService.prototype.__handleEntityEvent = function AbsyncService$__handleEntityEvent( eventName, callback, scope ) {
 		var _absyncProvider = this.__absyncProvider;
 
 		var wrapper = function() {
 			var args = arguments;
-			rootScope.$apply( function() {
+			scope.$apply( function() {
 				callback.apply( _absyncProvider.__ioSocket, args );
 			} );
 		};
@@ -211,64 +211,115 @@
 			// The raw cache is data that hasn't been deserialized and is used internally.
 			_cacheService.__entityCacheRaw = null;
 
-			//TODO: Continue code review
+			// TODO: Using deferreds is an anti-pattern and probably provides no value here.
+			_cacheService.__dataAvailableDeferred = $q.defer();
+			_cacheService.__objectsAvailableDeferred = $q.defer();
+			// A promise that is resolved once initial data synchronization has taken place.
+			_cacheService.dataAvailable = _cacheService.__dataAvailableDeferred.promise;
+			// A promise that is resolved once the received data is extended to models.
+			_cacheService.objectsAvailable = _cacheService.__objectsAvailableDeferred.promise;
 
-			_cacheService.dataAvailableDeferred = _cacheService.dataAvailableDeferred || $q.defer();
-			_cacheService.objectsAvailableDeferred = _cacheService.objectsAvailableDeferred || $q.defer();
-			_cacheService.dataAvailable = _cacheService.dataAvailableDeferred.promise;
-			_cacheService.objectsAvailable = _cacheService.objectsAvailableDeferred.promise;
-
+			// Use $http by default and expose it on the service.
+			// This allows the user to set a different, possibly decorated, HTTP interface for this service.
 			_cacheService.httpInterface = $http;
+			// Do the same for our logger.
+			_cacheService.logInterface = $log;
+			// The scope on which we broadcast all our relevant events.
+			_cacheService.scope = $rootScope;
+
+			// Expose the serializer/deserializer so that they can be adjusted at any time.
 			_cacheService.serializer = serializeModel;
 			_cacheService.deserializer = deserializeModel;
 
-			// Listen for entity broadcasts. These are sent when a record is received through a websocket.
-			$rootScope.$on( configuration.entityName, function( event, args ) {
-				var entityReceived = args;
-
-				// Determine if the received record consists ONLY of an id property,
-				// which would mean that this record was deleted from the backend.
-				if( 1 == Object.keys( entityReceived ).length && entityReceived.hasOwnProperty( "id" ) ) {
-					$log.info( "Entity was deleted from the server. Updating cache..." );
-					removeEntityFromCache( entityReceived.id );
-				} else {
-					updateCacheWithEntity( cacheService.deserializer( entityReceived ) );
-				}
-			} );
-			$rootScope.$on( configuration.collectionName, function( event, args ) {
-				var collectionReceived = args;
-
-				// Clear current cache before importing collection
-				while( 0 < cacheService.entityCache.length ) {
-					cacheService.entityCache.pop();
-				}
-
-				collectionReceived.forEach( function addEntityToCache( entityReceived ) {
-					updateCacheWithEntity( cacheService.deserializer( entityReceived ) );
-				} );
-			} );
-
-
-			absync.on( configuration.entityName, function( message ) {
+			// Tell absync to register an event listener for both our entity and its collection.
+			// When we receive these events, we broadcast an equal Angular event on the root scope.
+			// This way the user can already peek at the data (manipulating it is discouraged though).
+			absync.on( configuration.entityName, function onEntityOnWebsocket( message ) {
 				$rootScope.$broadcast( configuration.entityName, message[ configuration.entityName ] );
 			} );
-			absync.on( configuration.collectionName, function( message ) {
+			absync.on( configuration.collectionName, function onCollectionOnWebsocket( message ) {
 				$rootScope.$broadcast( configuration.collectionName, message[ configuration.collectionName ] );
 			} );
 
-			cacheService.dataAvailable
-				.then( function( rawData ) {
-					cacheService.entityCache = cacheService.entityCache || [];
-					rawData[ configuration.collectionName ].forEach( function( rawEntity ) {
-						cacheService.entityCache.push( cacheService.deserializer( rawEntity ) );
-					} );
-					cacheService.objectsAvailableDeferred.resolve( cacheService.entityCache );
-					$rootScope.$broadcast( "collectionNew", {
-						service : cacheService,
-						cache   : cacheService.entityCache
-					} );
-				} );
+			// Now we listen on the root scope for the same events we're firing above.
+			// This is where our own absync synchronization logic kicks in.
+			$rootScope.$on( configuration.entityName, _cacheService.__onEntityReceived.bind( _cacheService ) );
+			$rootScope.$on( configuration.collectionName, _cacheService.__onCollectionReceived.bind( _cacheService ) );
+
+			// Wait for data to be available.
+			_cacheService.dataAvailable
+				.then( _cacheService.__onDataAvailable.bind( _cacheService ) );
 		}
+
+		/**
+		 * Event handler for when the initial badge of raw data becomes available.
+		 * @param {Array<Object>} rawData
+		 */
+		CacheService.prototype.__onDataAvailable = function CacheService$__onDataAvailable( rawData ) {
+			var _cacheService = this;
+
+			// _cacheService.entityCache is expected to be an empty array.
+			// We initialize it in the constructor to an empty array and we don't expect any writes to have
+			// happened to it. In case writes *did* happen, we assume that whoever wrote to it knows what
+			// they're doing.
+			rawData[ configuration.collectionName ].forEach( function deserializeCollectionEntry( rawEntity ) {
+				_cacheService.entityCache.push( _cacheService.deserializer( rawEntity ) );
+			} );
+
+			// Resolve out "objects are available" deferred.
+			// TODO: We could just as well initialize objectAvailable to the return value of this call block.
+			_cacheService.__objectsAvailableDeferred.resolve( _cacheService.entityCache );
+
+			// Notify the rest of the application about a fresh collection.
+			_cacheService.scope.$broadcast( "collectionNew", {
+				service : _cacheService,
+				cache   : _cacheService.entityCache
+			} );
+		};
+
+		/**
+		 * Event handler for when an entity is received on the root scope.
+		 * @param {Object} event The event object.
+		 * @param {Object} args The raw object as it was read from the wire.
+		 */
+		CacheService.prototype.__onEntityReceived = function CacheService$onEntityReceived( event, args ) {
+			var _cacheService = this;
+			var _entityReceived = args;
+
+			// Determine if the received record consists ONLY of an id property,
+			// which would mean that this record was deleted from the backend.
+			if( 1 === Object.keys( _entityReceived ).length && _entityReceived.hasOwnProperty( "id" ) ) {
+				_cacheService.logInterface.info( "Entity was deleted from the server. Updating cache…" );
+				_cacheService.__removeEntityFromCache( _entityReceived.id );
+
+			} else {
+				_cacheService.logInterface.debug( "Entity was updated on the server. Updating cache…" );
+				_cacheService.__updateCacheWithEntity( _cacheService.deserializer( _entityReceived ) );
+			}
+		};
+
+		/**
+		 * Event handler for when a collection is received on the root scope.
+		 * @param {Object} event The event object.
+		 * @param {Array<Object>} args The raw collection as it was read from the wire.
+		 */
+		CacheService.prototype.__onCollectionReceived = function CacheService$onCollectionReceived( event, args ) {
+			var _cacheService = this;
+			var _collectionReceived = args;
+
+			// When we're receiving a full collection, all data we currently have in our cache is useless.
+			// We reset the length of the array here, because assigning a new array would possibly conflict
+			// with watchers placed on the original object.
+			while( 0 < _cacheService.entityCache.length ) {
+				_cacheService.entityCache.length = 0;
+			}
+
+			// Deserialize the received data and place the models in our cache.
+			_collectionReceived.forEach( function addEntityToCache( entityReceived ) {
+				_cacheService.__updateCacheWithEntity( _cacheService.deserializer( entityReceived ) );
+			} );
+		};
+
 
 		/**
 		 * Ensure that the cached collection is retrieved from the server.
