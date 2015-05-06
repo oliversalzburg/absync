@@ -193,7 +193,7 @@
 			if( !_injectorHasModel ) {
 				throw new Error( "Unable to construct the '" + name + "' service, because the referenced model '" + configuration.model + "' is not available for injection." );
 			}
-			var _model = _injector.get( configuration.model );
+			var _model = (typeof configuration.model === "string" ) ? _injector.get( configuration.model ) : configuration.model;
 
 			// Retrieve the serialization methods.
 			var serializeModel = _model.serialize || configuration.serialize || serializationNoop;
@@ -226,6 +226,8 @@
 			_cacheService.logInterface = $log;
 			// The scope on which we broadcast all our relevant events.
 			_cacheService.scope = $rootScope;
+			// Keep a reference to $q.
+			_cacheService.q = $q;
 
 			// Expose the serializer/deserializer so that they can be adjusted at any time.
 			_cacheService.serializer = serializeModel;
@@ -234,12 +236,8 @@
 			// Tell absync to register an event listener for both our entity and its collection.
 			// When we receive these events, we broadcast an equal Angular event on the root scope.
 			// This way the user can already peek at the data (manipulating it is discouraged though).
-			absync.on( configuration.entityName, function onEntityOnWebsocket( message ) {
-				$rootScope.$broadcast( configuration.entityName, message[ configuration.entityName ] );
-			} );
-			absync.on( configuration.collectionName, function onCollectionOnWebsocket( message ) {
-				$rootScope.$broadcast( configuration.collectionName, message[ configuration.collectionName ] );
-			} );
+			absync.on( configuration.entityName, _cacheService.__onEntityOnWebsocket.bind( _cacheService ) );
+			absync.on( configuration.collectionName, _cacheService.__onCollectionOnWebsocket.bind( _cacheService ) );
 
 			// Now we listen on the root scope for the same events we're firing above.
 			// This is where our own absync synchronization logic kicks in.
@@ -252,8 +250,31 @@
 		}
 
 		/**
+		 * Invoked when an entity is received on a websocket.
+		 * Translates the websocket event to an Angular event and broadcasts it on the scope.
+		 * @param {Object} message
+		 * @private
+		 */
+		CacheService.prototype.__onEntityOnWebsocket = function CacheService$__onEntityOnWebsocket( message ) {
+			var _cacheService = this;
+			_cacheService.scope.$broadcast( configuration.entityName, message[ configuration.entityName ] );
+		};
+
+		/**
+		 * Invoked when a collection is received on a websocket.
+		 * Translates the websocket event to an Angular event and broadcasts it on the scope.
+		 * @param {Object} message
+		 * @private
+		 */
+		CacheService.prototype.__onCollectionOnWebsocket = function CacheService$__onCollectionOnWebsocket( message ) {
+			var _cacheService = this;
+			_cacheService.scope.$broadcast( configuration.collectionName, message[ configuration.collectionName ] );
+		};
+
+		/**
 		 * Event handler for when the initial badge of raw data becomes available.
 		 * @param {Array<Object>} rawData
+		 * @private
 		 */
 		CacheService.prototype.__onDataAvailable = function CacheService$__onDataAvailable( rawData ) {
 			var _cacheService = this;
@@ -262,9 +283,7 @@
 			// We initialize it in the constructor to an empty array and we don't expect any writes to have
 			// happened to it. In case writes *did* happen, we assume that whoever wrote to it knows what
 			// they're doing.
-			rawData[ configuration.collectionName ].forEach( function deserializeCollectionEntry( rawEntity ) {
-				_cacheService.entityCache.push( _cacheService.deserializer( rawEntity ) );
-			} );
+			rawData[ configuration.collectionName ].forEach( deserializeCollectionEntry );
 
 			// Resolve out "objects are available" deferred.
 			// TODO: We could just as well initialize objectAvailable to the return value of this call block.
@@ -275,14 +294,19 @@
 				service : _cacheService,
 				cache   : _cacheService.entityCache
 			} );
+
+			function deserializeCollectionEntry( rawEntity ) {
+				_cacheService.entityCache.push( _cacheService.deserializer( rawEntity ) );
+			}
 		};
 
 		/**
 		 * Event handler for when an entity is received on the root scope.
 		 * @param {Object} event The event object.
 		 * @param {Object} args The raw object as it was read from the wire.
+		 * @private
 		 */
-		CacheService.prototype.__onEntityReceived = function CacheService$onEntityReceived( event, args ) {
+		CacheService.prototype.__onEntityReceived = function CacheService$__onEntityReceived( event, args ) {
 			var _cacheService = this;
 			var _entityReceived = args;
 
@@ -302,8 +326,9 @@
 		 * Event handler for when a collection is received on the root scope.
 		 * @param {Object} event The event object.
 		 * @param {Array<Object>} args The raw collection as it was read from the wire.
+		 * @private
 		 */
-		CacheService.prototype.__onCollectionReceived = function CacheService$onCollectionReceived( event, args ) {
+		CacheService.prototype.__onCollectionReceived = function CacheService$__onCollectionReceived( event, args ) {
 			var _cacheService = this;
 			var _collectionReceived = args;
 
@@ -315,132 +340,169 @@
 			}
 
 			// Deserialize the received data and place the models in our cache.
-			_collectionReceived.forEach( function addEntityToCache( entityReceived ) {
-				_cacheService.__updateCacheWithEntity( _cacheService.deserializer( entityReceived ) );
-			} );
-		};
+			_collectionReceived.forEach( addEntityToCache );
 
+			function addEntityToCache( entityReceived ) {
+				var deserialized = _cacheService.deserializer( entityReceived );
+				_cacheService.__updateCacheWithEntity( deserialized );
+			}
+		};
 
 		/**
 		 * Ensure that the cached collection is retrieved from the server.
-		 * @param {Boolean} forceReload Should the data be loaded, even if the service already has a local cache?
+		 * @param {Boolean} [forceReload=false] Should the data be loaded, even if the service already has a local cache?
 		 * @returns {Promise<Array<configuration.model>>}
-		 * @constructor
 		 */
 		CacheService.prototype.ensureLoaded = function CacheService$ensureLoaded( forceReload ) {
-			forceReload = (forceReload === true);
-			if( null === cacheService.entityCacheRaw || forceReload ) {
-				cacheService.entityCacheRaw = [];
+			var _cacheService = this;
 
+			forceReload = (forceReload === true);
+
+			// We only perform any loading, if we don't have raw data cached yet, or if we're forced.
+			if( null === _cacheService.__entityCacheRaw || forceReload ) {
+				_cacheService.__entityCacheRaw = [];
+
+				// If the user did not provide information necessary to work with a collection, immediately return
+				// a promise for an empty collection. The user could still use read() to grab individual entities.
 				if( !configuration.collectionName || !configuration.collectionUri ) {
-					return $q( true )
+					return _cacheService.q( [] );
 				}
-				$log.info( "Retrieving '" + configuration.collectionName + "' collection…" );
-				cacheService.httpInterface.get( configuration.collectionUri )
-					.then( function( peopleResult ) {
-						cacheService.entityCacheRaw = peopleResult.data;
-						cacheService.dataAvailableDeferred.resolve( peopleResult.data );
-					},
-					function( error ) {
-						cacheService.entityCacheRaw = null;
-						$rootScope.$emit( "authorizationError", error );
-					} );
+
+				_cacheService.logInterface.info( "Retrieving '" + configuration.collectionName + "' collection…" );
+				_cacheService.httpInterface
+					.get( configuration.collectionUri )
+					.then( onCollectionReceived, onCollectionRetrievalFailure );
 			}
 
-			return $q.all(
+			// Return a promise that is resolved once the data was read and converted to models.
+			// When the promise is resolved, it will return a reference to the entity cache.
+			return _cacheService.q.all(
 				[
-					cacheService.dataAvailable,
-					cacheService.objectsAvailable
+					_cacheService.dataAvailable,
+					_cacheService.objectsAvailable
 				] )
 				.then( function dataAvailable() {
-					return cacheService.entityCache;
+					return _cacheService.entityCache;
 				} );
-		};
 
+			/**
+			 * Invoked when the collection was received from the server.
+			 * @param {Object} collectionResult
+			 */
+			function onCollectionReceived( collectionResult ) {
+				_cacheService.__entityCacheRaw = collectionResult.data;
+				_cacheService.__dataAvailableDeferred.resolve( collectionResult.data );
+			}
+
+			/**
+			 * Invoked when there was an error while trying to retrieve the collection from the server.
+			 * @param {Error} error
+			 */
+			function onCollectionRetrievalFailure( error ) {
+				_cacheService.logInterface.error( "Unable to retrieve the collection from the server.", error );
+				_cacheService.__entityCacheRaw = null;
+				_cacheService.scope.$emit( "absyncError", error );
+			}
+		};
 
 		/**
 		 * Read a single entity from the cache, or load it from the server if required.
+		 * The entity will be placed into the cache.
 		 * @param {String} id The ID of the entity to retrieve.
 		 * @returns {Promise<configuration.model>}
 		 */
 		CacheService.prototype.read = function CacheService$read( id ) {
-			var deferred = $q.defer();
+			var _cacheService = this;
 
 			// Check if the entity is in the cache and return instantly if found.
-			for( var entityIndex = 0, entity = cacheService.entityCache[ 0 ], cacheSize = cacheService.entityCache.length;
-			     entityIndex < cacheSize;
-			     ++entityIndex, entity = cacheService.entityCache[ entityIndex ] ) {
-				if( entity.id == id ) {
-					deferred.resolve( entity );
-					return deferred.promise;
+			for( var entityIndex = 0, entity = _cacheService.entityCache[ 0 ];
+			     entityIndex < _cacheService.entityCache.length;
+			     ++entityIndex, entity = _cacheService.entityCache[ entityIndex ] ) {
+				if( entity.id === id ) {
+					return _cacheService.q( entity );
 				}
 			}
 
 			// Grab the entity from the backend.
-			cacheService.httpInterface.get( configuration.entityUri + "/" + id ).success( onEntityRetrieved );
+			return _cacheService.httpInterface
+				.get( configuration.entityUri + "/" + id )
+				.then( onEntityRetrieved, onEntityRetrievalFailure );
+
 			function onEntityRetrieved( data ) {
 				if( !data[ configuration.entityName ] ) {
-					deferred.reject( new Error( "The requested entity could not be found in the database." ) );
-					return deferred.promise;
+					throw new Error( "The requested entity could not be found in the database." );
 				}
 
-				var entity = cacheService.deserializer( data[ configuration.entityName ] );
-				updateCacheWithEntity( entity );
-				deferred.resolve( entity );
+				// Deserialize the object and place it into the cache.
+				// We do not need to check here if the object already exists in the cache.
+				// While it could be possible that the same entity is retrieved multiple times, __updateCacheWithEntity
+				// will not insert duplicated into the cache.
+				var deserialized = _cacheService.deserializer( data[ configuration.entityName ] );
+				_cacheService.__updateCacheWithEntity( deserialized );
+				return deserialized;
 			}
 
-			return deferred.promise;
+			/**
+			 * Invoked when there was an error while trying to retrieve the entity from the server.
+			 * @param {Error} error
+			 */
+			function onEntityRetrievalFailure( error ) {
+				_cacheService.logInterface.error( "Unable to retrieve entity with ID '" + id + "' from the server.", error );
+				_cacheService.scope.$emit( "absyncError", error );
+			}
 		};
 
 		/**
 		 * Updates an entity and persists it to the backend and the cache.
-		 * @param {Object} entity
+		 * @param {configuration.model} entity
+		 * @return {Promise<configuration.model>} A promise that will be resolved with the updated entity.
 		 */
 		CacheService.prototype.update = function CacheService$update( entity ) {
-			var promise;
+			var _cacheService = this;
 
-			var reduced = cacheService.reduceComplex( entity );
-			var serialized = cacheService.serializer( reduced );
+			// First create a copy of the object, which has complex properties reduced to their respective IDs.
+			var reduced = _cacheService.reduceComplex( entity );
+			// Now serialize the object.
+			var serialized = _cacheService.serializer( reduced );
 
-			// Wrap entity in a new object, with a single property, named after the entity type.
-			var wrapper = {};
-			wrapper[ configuration.entityName ] = serialized;
+			// Wrap the entity in a new object, with a single property, named after the entity type.
+			var wrappedEntity = {};
+			wrappedEntity[ configuration.entityName ] = serialized;
 
+			// Check if the entity has an "id" property, if it has, we will update. Otherwise, we create.
 			if( "undefined" !== typeof( entity.id ) ) {
-				promise = cacheService.httpInterface.put( configuration.entityUri + "/" + entity.id, wrapper );
-				promise
-					.then( function( result ) {
-						// Writing an entity to the backend will usually invoke an update event to be
-						// broadcast over websockets, where would also retrieve the updated record.
-						// We still put the updated record we receive here into the cache to ensure early consistency.
-						if( result.data[ configuration.entityName ] ) {
-							var newEntity = cacheService.deserializer( result.data[ configuration.entityName ] );
-							updateCacheWithEntity( newEntity );
-						}
-					},
-					function( error ) {
-						$log.error( error );
-					} );
+				return _cacheService.httpInterface
+					.put( configuration.entityUri + "/" + entity.id, wrappedEntity )
+					.then( afterEntityStored, onEntityStorageFailure );
 
 			} else {
 				// Create a new entity
-				promise = cacheService.httpInterface.post( configuration.collectionUri, wrapper );
-				promise
-					.then( function( result ) {
-						// Writing an entity to the backend will usually invoke an update event to be
-						// broadcast over websockets, where would also retrieve the updated record.
-						// We still put the updated record we receive here into the cache to ensure early consistency.
-						if( result.data[ configuration.entityName ] ) {
-							var newEntity = cacheService.deserializer( result.data[ configuration.entityName ] );
-							updateCacheWithEntity( newEntity );
-						}
-					},
-					function( error ) {
-						$log.error( error );
-					} );
+				return _cacheService.httpInterface
+					.post( configuration.collectionUri, wrappedEntity )
+					.then( afterEntityStored, onEntityStorageFailure );
 			}
 
-			return promise;
+			/**
+			 * Invoked when the entity was stored on the server.
+			 * @param result
+			 */
+			function afterEntityStored( result ) {
+				// Writing an entity to the backend will usually invoke an update event to be
+				// broadcast over websockets, where we would also retrieve the updated record.
+				// We still put the updated record we receive here into the cache to ensure early consistency.
+				// TODO: This might actually not be optimal. Consider only handling the websocket update.
+				if( result.data[ configuration.entityName ] ) {
+					var newEntity = _cacheService.deserializer( result.data[ configuration.entityName ] );
+					_cacheService.__updateCacheWithEntity( newEntity );
+					return newEntity;
+				}
+				throw new Error( "The response from the server was not in the expected format. It should have a member named '" + configuration.entityName + "'." );
+			}
+
+			function onEntityStorageFailure( error ) {
+				_cacheService.logInterface.error( "Unable to store entity on the server.", error );
+				_cacheService.logInterface.error( error );
+			}
 		};
 
 		/**

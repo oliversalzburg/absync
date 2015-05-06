@@ -15,7 +15,9 @@
 	 * @param {Object|String} model Reference to a constructor for the model type, or it's name.
 	 * If a name is given, absync will try to retrieve instances of the type through injection.
 	 * @param {String} collectionUri The REST API URI where the collection can be found.
+	 * Must not end with /
 	 * @param {String} entityUri The REST API URI where single entities out of the collection can be found.
+	 * Must not end with /
 	 * @param {String} [collectionName] The name of the collection. Uses the model name suffixed with "s" by default.
 	 * Using the default value is not recommended.
 	 * @param {String} [entityName] The name of an entity. Uses the model name by default.
