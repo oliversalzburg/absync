@@ -413,17 +413,22 @@
 		 * Read a single entity from the cache, or load it from the server if required.
 		 * The entity will be placed into the cache.
 		 * @param {String} id The ID of the entity to retrieve.
+		 * @param {Boolean} [forceReload=false] Should the entity be retrieved from the server, even if it is already in the cache?
 		 * @returns {Promise<configuration.model>}
 		 */
-		CacheService.prototype.read = function CacheService$read( id ) {
+		CacheService.prototype.read = function CacheService$read( id, forceReload ) {
 			var _cacheService = this;
 
-			// Check if the entity is in the cache and return instantly if found.
-			for( var entityIndex = 0, entity = _cacheService.entityCache[ 0 ];
-			     entityIndex < _cacheService.entityCache.length;
-			     ++entityIndex, entity = _cacheService.entityCache[ entityIndex ] ) {
-				if( entity.id === id ) {
-					return _cacheService.q.when( entity );
+			forceReload = (forceReload === true);
+
+			if( !forceReload ) {
+				// Check if the entity is in the cache and return instantly if found.
+				for( var entityIndex = 0, entity = _cacheService.entityCache[ 0 ];
+				     entityIndex < _cacheService.entityCache.length;
+				     ++entityIndex, entity = _cacheService.entityCache[ entityIndex ] ) {
+					if( entity.id === id ) {
+						return _cacheService.q.when( entity );
+					}
 				}
 			}
 
