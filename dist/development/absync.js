@@ -368,7 +368,7 @@
 				// If the user did not provide information necessary to work with a collection, immediately return
 				// a promise for an empty collection. The user could still use read() to grab individual entities.
 				if( !configuration.collectionName || !configuration.collectionUri ) {
-					return _cacheService.q( [] );
+					return _cacheService.q.when( [] );
 				}
 
 				_cacheService.logInterface.info( "Retrieving '" + configuration.collectionName + "' collection…" );
@@ -390,11 +390,15 @@
 
 			/**
 			 * Invoked when the collection was received from the server.
-			 * @param {Object} collectionResult
+			 * @param {Object} serverResponse The reply sent from the server.
 			 */
-			function onCollectionReceived( collectionResult ) {
-				_cacheService.__entityCacheRaw = collectionResult.data;
-				_cacheService.__dataAvailableDeferred.resolve( collectionResult.data );
+			function onCollectionReceived( serverResponse ) {
+				if( !serverResponse.data[ configuration.collectionName ] ) {
+					throw new Error( "The response from the server was not in the expected format. It should have a member named '" + configuration.collectionName + "'." );
+				}
+
+				_cacheService.__entityCacheRaw = serverResponse.data;
+				_cacheService.__dataAvailableDeferred.resolve( serverResponse.data );
 			}
 
 			/**
@@ -412,17 +416,22 @@
 		 * Read a single entity from the cache, or load it from the server if required.
 		 * The entity will be placed into the cache.
 		 * @param {String} id The ID of the entity to retrieve.
+		 * @param {Boolean} [forceReload=false] Should the entity be retrieved from the server, even if it is already in the cache?
 		 * @returns {Promise<configuration.model>}
 		 */
-		CacheService.prototype.read = function CacheService$read( id ) {
+		CacheService.prototype.read = function CacheService$read( id, forceReload ) {
 			var _cacheService = this;
 
-			// Check if the entity is in the cache and return instantly if found.
-			for( var entityIndex = 0, entity = _cacheService.entityCache[ 0 ];
-			     entityIndex < _cacheService.entityCache.length;
-			     ++entityIndex, entity = _cacheService.entityCache[ entityIndex ] ) {
-				if( entity.id === id ) {
-					return _cacheService.q( entity );
+			forceReload = (forceReload === true);
+
+			if( !forceReload ) {
+				// Check if the entity is in the cache and return instantly if found.
+				for( var entityIndex = 0, entity = _cacheService.entityCache[ 0 ];
+				     entityIndex < _cacheService.entityCache.length;
+				     ++entityIndex, entity = _cacheService.entityCache[ entityIndex ] ) {
+					if( entity.id === id ) {
+						return _cacheService.q.when( entity );
+					}
 				}
 			}
 
@@ -431,16 +440,20 @@
 				.get( configuration.entityUri + "/" + id )
 				.then( onEntityRetrieved, onEntityRetrievalFailure );
 
-			function onEntityRetrieved( data ) {
-				if( !data[ configuration.entityName ] ) {
-					throw new Error( "The requested entity could not be found in the database." );
+			/**
+			 * Invoked when the entity was retrieved from the server.
+			 * @param {Object} serverResponse The reply sent from the server.
+			 */
+			function onEntityRetrieved( serverResponse ) {
+				if( !serverResponse.data[ configuration.entityName ] ) {
+					throw new Error( "The response from the server was not in the expected format. It should have a member named '" + configuration.entityName + "'." );
 				}
 
 				// Deserialize the object and place it into the cache.
 				// We do not need to check here if the object already exists in the cache.
 				// While it could be possible that the same entity is retrieved multiple times, __updateCacheWithEntity
 				// will not insert duplicated into the cache.
-				var deserialized = _cacheService.deserializer( data[ configuration.entityName ] );
+				var deserialized = _cacheService.deserializer( serverResponse.data[ configuration.entityName ] );
 				_cacheService.__updateCacheWithEntity( deserialized );
 				return deserialized;
 			}
@@ -487,15 +500,15 @@
 
 			/**
 			 * Invoked when the entity was stored on the server.
-			 * @param result
+			 * @param {Object} serverResponse The reply sent from the server.
 			 */
-			function afterEntityStored( result ) {
+			function afterEntityStored( serverResponse ) {
 				// Writing an entity to the backend will usually invoke an update event to be
 				// broadcast over websockets, where we would also retrieve the updated record.
 				// We still put the updated record we receive here into the cache to ensure early consistency.
 				// TODO: This might actually not be optimal. Consider only handling the websocket update.
-				if( result.data[ configuration.entityName ] ) {
-					var newEntity = _cacheService.deserializer( result.data[ configuration.entityName ] );
+				if( serverResponse.data[ configuration.entityName ] ) {
+					var newEntity = _cacheService.deserializer( serverResponse.data[ configuration.entityName ] );
 					_cacheService.__updateCacheWithEntity( newEntity );
 					return newEntity;
 				}
@@ -562,8 +575,9 @@
 
 					// Use the "copyFrom" method on the entity, if it exists, otherwise use naive approach.
 					var targetEntity = _cacheService.entityCache[ entityIndex ];
-					if( targetEntity.copyFrom ) {
+					if( typeof targetEntity.copyFrom === "function" ) {
 						targetEntity.copyFrom( entityToCache );
+
 					} else {
 						angular.extend( targetEntity, entityToCache );
 					}
@@ -681,7 +695,7 @@
 		 * Populate references to complex types in an instance.
 		 * @param {Object} entity The entity that should be manipulated.
 		 * @param {String} propertyName The name of the property of entity which should be populated.
-		 * @param {Object} cache An instance of another caching service that can provide the complex
+		 * @param {CacheService} cache An instance of another caching service that can provide the complex
 		 * type instances which are being referenced in entity.
 		 * @param {Boolean} [force=false] If true, all complex types will be replaced with references to the
 		 * instances in cache; otherwise, only properties that are string representations of complex type IDs will be replaced.
