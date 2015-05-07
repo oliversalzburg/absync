@@ -232,6 +232,10 @@
 			// Prefix log messages with this string.
 			_cacheService.logPrefix = "absync:" + name.toLocaleUpperCase() + " ";
 
+			// If enabled, entities received in response to a create or update API call, will be put into the cache.
+			// Otherwise, absync will wait for them to be published through the websocket channel.
+			_cacheService.forceEarlyCacheUpdate = false;
+
 			// Expose the serializer/deserializer so that they can be adjusted at any time.
 			_cacheService.serializer = serializeModel;
 			_cacheService.deserializer = deserializeModel;
@@ -509,7 +513,11 @@
 				// TODO: This might actually not be optimal. Consider only handling the websocket update.
 				if( serverResponse.data[ configuration.entityName ] ) {
 					var newEntity = _cacheService.deserializer( serverResponse.data[ configuration.entityName ] );
-					_cacheService.__updateCacheWithEntity( newEntity );
+
+					// If early cache updates are forced, put the return entity into the cache.
+					if( _cacheService.forceEarlyCacheUpdate ) {
+						_cacheService.__updateCacheWithEntity( newEntity );
+					}
 					return newEntity;
 				}
 				throw new Error( "The response from the server was not in the expected format. It should have a member named '" + configuration.entityName + "'." );
