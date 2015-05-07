@@ -387,11 +387,15 @@
 
 			/**
 			 * Invoked when the collection was received from the server.
-			 * @param {Object} collectionResult
+			 * @param {Object} serverResponse The reply sent from the server.
 			 */
-			function onCollectionReceived( collectionResult ) {
-				_cacheService.__entityCacheRaw = collectionResult.data;
-				_cacheService.__dataAvailableDeferred.resolve( collectionResult.data );
+			function onCollectionReceived( serverResponse ) {
+				if( !serverResponse.data[ configuration.collectionName ] ) {
+					throw new Error( "The response from the server was not in the expected format. It should have a member named '" + configuration.collectionName + "'." );
+				}
+
+				_cacheService.__entityCacheRaw = serverResponse.data;
+				_cacheService.__dataAvailableDeferred.resolve( serverResponse.data );
 			}
 
 			/**
@@ -428,16 +432,20 @@
 				.get( configuration.entityUri + "/" + id )
 				.then( onEntityRetrieved, onEntityRetrievalFailure );
 
-			function onEntityRetrieved( data ) {
-				if( !data[ configuration.entityName ] ) {
-					throw new Error( "The requested entity could not be found in the database." );
+			/**
+			 * Invoked when the entity was retrieved from the server.
+			 * @param {Object} serverResponse The reply sent from the server.
+			 */
+			function onEntityRetrieved( serverResponse ) {
+				if( !serverResponse.data[ configuration.entityName ] ) {
+					throw new Error( "The response from the server was not in the expected format. It should have a member named '" + configuration.entityName + "'." );
 				}
 
 				// Deserialize the object and place it into the cache.
 				// We do not need to check here if the object already exists in the cache.
 				// While it could be possible that the same entity is retrieved multiple times, __updateCacheWithEntity
 				// will not insert duplicated into the cache.
-				var deserialized = _cacheService.deserializer( data[ configuration.entityName ] );
+				var deserialized = _cacheService.deserializer( serverResponse.data[ configuration.entityName ] );
 				_cacheService.__updateCacheWithEntity( deserialized );
 				return deserialized;
 			}
@@ -484,15 +492,15 @@
 
 			/**
 			 * Invoked when the entity was stored on the server.
-			 * @param result
+			 * @param {Object} serverResponse The reply sent from the server.
 			 */
-			function afterEntityStored( result ) {
+			function afterEntityStored( serverResponse ) {
 				// Writing an entity to the backend will usually invoke an update event to be
 				// broadcast over websockets, where we would also retrieve the updated record.
 				// We still put the updated record we receive here into the cache to ensure early consistency.
 				// TODO: This might actually not be optimal. Consider only handling the websocket update.
-				if( result.data[ configuration.entityName ] ) {
-					var newEntity = _cacheService.deserializer( result.data[ configuration.entityName ] );
+				if( serverResponse.data[ configuration.entityName ] ) {
+					var newEntity = _cacheService.deserializer( serverResponse.data[ configuration.entityName ] );
 					_cacheService.__updateCacheWithEntity( newEntity );
 					return newEntity;
 				}
