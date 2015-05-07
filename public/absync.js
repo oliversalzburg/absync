@@ -572,8 +572,9 @@
 
 					// Use the "copyFrom" method on the entity, if it exists, otherwise use naive approach.
 					var targetEntity = _cacheService.entityCache[ entityIndex ];
-					if( targetEntity.copyFrom ) {
+					if( typeof targetEntity.copyFrom === "function" ) {
 						targetEntity.copyFrom( entityToCache );
+
 					} else {
 						angular.extend( targetEntity, entityToCache );
 					}
