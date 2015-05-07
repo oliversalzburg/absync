@@ -237,6 +237,13 @@
 			// Keep a reference to $q.
 			_cacheService.q = $q;
 
+			// Prefix log messages with this string.
+			_cacheService.logPrefix = "absync:" + name.toLocaleUpperCase() + " ";
+
+			// If enabled, entities received in response to a create or update API call, will be put into the cache.
+			// Otherwise, absync will wait for them to be published through the websocket channel.
+			_cacheService.forceEarlyCacheUpdate = false;
+
 			// Expose the serializer/deserializer so that they can be adjusted at any time.
 			_cacheService.serializer = serializeModel;
 			_cacheService.deserializer = deserializeModel;
@@ -322,11 +329,11 @@
 			// Determine if the received record consists ONLY of an id property,
 			// which would mean that this record was deleted from the backend.
 			if( 1 === Object.keys( _entityReceived ).length && _entityReceived.hasOwnProperty( "id" ) ) {
-				_cacheService.logInterface.info( "Entity was deleted from the server. Updating cache…" );
+				_cacheService.logInterface.info( _cacheService.logPrefix + "Entity was deleted from the server. Updating cache…" );
 				_cacheService.__removeEntityFromCache( _entityReceived.id );
 
 			} else {
-				_cacheService.logInterface.debug( "Entity was updated on the server. Updating cache…" );
+				_cacheService.logInterface.debug( _cacheService.logPrefix + "Entity was updated on the server. Updating cache…" );
 				_cacheService.__updateCacheWithEntity( _cacheService.deserializer( _entityReceived ) );
 			}
 		};
@@ -377,7 +384,7 @@
 					return _cacheService.q.when( [] );
 				}
 
-				_cacheService.logInterface.info( "Retrieving '" + configuration.collectionName + "' collection…" );
+				_cacheService.logInterface.info( _cacheService.logPrefix + "Retrieving '" + configuration.collectionName + "' collection…" );
 				_cacheService.httpInterface
 					.get( configuration.collectionUri )
 					.then( onCollectionReceived, onCollectionRetrievalFailure );
@@ -412,7 +419,7 @@
 			 * @param {Error} error
 			 */
 			function onCollectionRetrievalFailure( error ) {
-				_cacheService.logInterface.error( "Unable to retrieve the collection from the server.", error );
+				_cacheService.logInterface.error( _cacheService.logPrefix + "Unable to retrieve the collection from the server.", error );
 				_cacheService.__entityCacheRaw = null;
 				_cacheService.scope.$emit( "absyncError", error );
 			}
@@ -469,7 +476,7 @@
 			 * @param {Error} error
 			 */
 			function onEntityRetrievalFailure( error ) {
-				_cacheService.logInterface.error( "Unable to retrieve entity with ID '" + id + "' from the server.", error );
+				_cacheService.logInterface.error( _cacheService.logPrefix + "Unable to retrieve entity with ID '" + id + "' from the server.", error );
 				_cacheService.scope.$emit( "absyncError", error );
 			}
 		};
@@ -515,14 +522,18 @@
 				// TODO: This might actually not be optimal. Consider only handling the websocket update.
 				if( serverResponse.data[ configuration.entityName ] ) {
 					var newEntity = _cacheService.deserializer( serverResponse.data[ configuration.entityName ] );
-					_cacheService.__updateCacheWithEntity( newEntity );
+
+					// If early cache updates are forced, put the return entity into the cache.
+					if( _cacheService.forceEarlyCacheUpdate ) {
+						_cacheService.__updateCacheWithEntity( newEntity );
+					}
 					return newEntity;
 				}
 				throw new Error( "The response from the server was not in the expected format. It should have a member named '" + configuration.entityName + "'." );
 			}
 
 			function onEntityStorageFailure( error ) {
-				_cacheService.logInterface.error( "Unable to store entity on the server.", error );
+				_cacheService.logInterface.error( _cacheService.logPrefix + "Unable to store entity on the server.", error );
 				_cacheService.logInterface.error( error );
 			}
 		};
@@ -563,7 +574,7 @@
 		CacheService.prototype.__updateCacheWithEntity = function CacheService$__updateCacheWithEntity( entityToCache ) {
 			var _cacheService = this;
 
-			_cacheService.logInterface.info( "Updating entity in cache…" );
+			_cacheService.logInterface.info( _cacheService.logPrefix + "Updating entity in cache…" );
 
 			var found = false;
 			for( var entityIndex = 0, entity = _cacheService.entityCache[ 0 ];
