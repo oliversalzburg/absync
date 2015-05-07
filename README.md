@@ -42,7 +42,7 @@ One of the key concepts of absync is that model properties can be decorated with
 	} );
 	```
 	
-	absync support model inheritance, through [mongoose-schema-extend](https://github.com/briankircho/mongoose-schema-extend):
+	absync supports model inheritance, through [mongoose-schema-extend](https://github.com/briankircho/mongoose-schema-extend):
 	
 	```js
 	var extendedTypeDescription = {
