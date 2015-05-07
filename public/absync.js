@@ -686,7 +686,7 @@
 		 * Populate references to complex types in an instance.
 		 * @param {Object} entity The entity that should be manipulated.
 		 * @param {String} propertyName The name of the property of entity which should be populated.
-		 * @param {Object} cache An instance of another caching service that can provide the complex
+		 * @param {CacheService} cache An instance of another caching service that can provide the complex
 		 * type instances which are being referenced in entity.
 		 * @param {Boolean} [force=false] If true, all complex types will be replaced with references to the
 		 * instances in cache; otherwise, only properties that are string representations of complex type IDs will be replaced.
