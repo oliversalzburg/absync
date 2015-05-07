@@ -365,7 +365,7 @@
 				// If the user did not provide information necessary to work with a collection, immediately return
 				// a promise for an empty collection. The user could still use read() to grab individual entities.
 				if( !configuration.collectionName || !configuration.collectionUri ) {
-					return _cacheService.q( [] );
+					return _cacheService.q.when( [] );
 				}
 
 				_cacheService.logInterface.info( "Retrieving '" + configuration.collectionName + "' collection…" );
@@ -419,7 +419,7 @@
 			     entityIndex < _cacheService.entityCache.length;
 			     ++entityIndex, entity = _cacheService.entityCache[ entityIndex ] ) {
 				if( entity.id === id ) {
-					return _cacheService.q( entity );
+					return _cacheService.q.when( entity );
 				}
 			}
 
