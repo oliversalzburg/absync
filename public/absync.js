@@ -219,6 +219,8 @@
 		} );
 	};
 
+	//TODO: Remove this noinspection when WebStorm 11 is available.
+	//noinspection JSValidateJSDoc
 	/**
 	 * A closure to make the configuration available to the cache service.
 	 * @param {String} name The name of the service.
@@ -232,12 +234,17 @@
 		 * This service factory is the core of absync.
 		 * It returns a CacheService instance that is specialized to the given configuration.
 		 * This service will handle keep the stored collection in sync.
+		 * @param {angular.IHttpService|Object} $http
+		 * @param {angular.auto.IInjectorService|Object} $injector
+		 * @param {angular.ILogService|Object} $log
+		 * @param {angular.IQService|Object} $q
+		 * @param {angular.IRootScopeService|Object} $rootScope
+		 * @param {AbsyncService} absync
 		 * @returns {CacheService}
 		 * @ngInject
 		 */
 		function CacheService( $http, $injector, $log, $q, $rootScope, absync ) {
 			var _cacheService = this;
-			$log.info( "absync service '" + name + "' was instantiated." );
 
 			// Retrieve a reference to the model of the collection that is being cached.
 			var _injector = configuration.injector || $injector;
@@ -306,6 +313,8 @@
 			// Wait for data to be available.
 			_cacheService.dataAvailable
 				.then( _cacheService.__onDataAvailable.bind( _cacheService ) );
+
+			_cacheService.logInterface.info( _cacheService.logPrefix + "service was instantiated." );
 		}
 
 		/**
