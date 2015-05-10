@@ -79,12 +79,14 @@
 		// This can happen when a service was constructed before absync was configured.
 		if( _absyncProvider.__registerLater.length ) {
 			angular.forEach( _absyncProvider.__registerLater, function registerListener( listener ) {
-				this.__handleEntityEvent( listener.eventName, listener.callback, listener.rootScope );
+				this.__handleEntityEvent( listener.eventName, listener.callback );
 			} );
 			_absyncProvider.__registerLater = [];
 		}
 	};
 
+	//TODO: Remove this noinspection when WebStorm 11 is available.
+	//noinspection JSValidateJSDoc
 	/**
 	 * Request a new synchronized collection.
 	 * This only registers the intent to use that collection. It will be constructed when it is first used.
@@ -109,6 +111,7 @@
 		_absyncProvider.__provide.service( name, _absyncProvider.__collections[ name ] );
 	};
 
+	//noinspection JSUnusedGlobalSymbols
 	/**
 	 * Register the service factory.
 	 * @param {angular.IRootScopeService|Object} $rootScope
@@ -119,22 +122,23 @@
 		return new AbsyncService( this, $rootScope );
 	};
 
+
 	/**
 	 * The service that is received when injecting "absync".
 	 * This service is primarily used internally to set up the connection between socket.io and the individual
 	 * caching services.
 	 * @param {AbsyncProvider|Object} parentProvider The AbsyncProvider that provides this service.
-	 * @param {angular.IScope|Object} scope The Angular scope to use (usually the root scope).
 	 * @constructor
 	 */
-	function AbsyncService( parentProvider, scope ) {
+	function AbsyncService( parentProvider ) {
 		this.__absyncProvider = parentProvider;
-		this.__scope = scope;
 	}
 
 	/**
 	 * Configure the socket.io connection for absync.
-	 * @param configuration
+	 * This configuration of absync should usually be performed through the absyncProvider in the configuration
+	 * phase of a module.
+	 * @param {io.Socket|Function|Object} configuration The socket.io instance to use.
 	 */
 	AbsyncService.prototype.configure = function AbsyncService$configure( configuration ) {
 		var _absyncProvider = this.__absyncProvider;
@@ -143,23 +147,51 @@
 
 	/**
 	 * Register an event listener that is called when a specific entity is received on the websocket.
-	 * @param {String} eventName
-	 * @param {Function} callback
+	 * @param {String} eventName The event name, usually the name of the entity.
+	 * @param {Function} callback The function to call when the entity is received.
+	 * @return {Function|null} If the listener could be registered, it returns a function that, when called, removes
+	 * the event listener.
+	 * If the listener registration was delayed, null is returned.
 	 */
 	AbsyncService.prototype.on = function AbsyncService$on( eventName, callback ) {
 		var _absyncProvider = this.__absyncProvider;
 		var _absyncService = this;
 
+		// If we have no configured socket.io connection yet, remember to register it later.
 		if( !_absyncProvider.__ioSocket ) {
+
+			if( _absyncProvider.__registerLater.length > 9999 ) {
+				// Be defensive, something is probably not right here.
+				return null;
+			}
+
+			// TODO: Use promises here, so that we can always return the event listener removal function.
 			_absyncProvider.__registerLater.push( {
 				eventName : eventName,
-				callback  : callback,
-				rootScope : _absyncProvider.__scope
+				callback  : callback
 			} );
-			return;
+			return null;
 		}
 
-		_absyncService.__handleEntityEvent( eventName, callback, _absyncService.__scope );
+		return _absyncService.__handleEntityEvent( eventName, callback );
+	};
+
+	/**
+	 * Register an event listener on the websocket.
+	 * @param {String} eventName The event name, usually the name of the entity.
+	 * @param {Function} callback The function to call when the entity is received.
+	 * @returns {Function}
+	 */
+	AbsyncService.prototype.__handleEntityEvent = function AbsyncService$__handleEntityEvent( eventName, callback ) {
+		var _absyncProvider = this.__absyncProvider;
+
+		// Register the callback with socket.io.
+		_absyncProvider.__ioSocket.on( eventName, callback );
+
+		// Return a function that removes the listener.
+		return function removeListener() {
+			_absyncProvider.__ioSocket.removeListener( eventName, callback );
+		};
 	};
 
 	/**
@@ -167,7 +199,7 @@
 	 * This is not utilized in absync internally.
 	 * @param {String} eventName
 	 * @param {*} data
-	 * @param {Function} callback
+	 * @param {Function} [callback]
 	 */
 	AbsyncService.prototype.emit = function AbsyncService$emit( eventName, data, callback ) {
 		var _absyncProvider = this.__absyncProvider;
@@ -176,41 +208,11 @@
 			throw new Error( "socket.io is not initialized." );
 		}
 
-		var _rootScope = this.rootScope;
-
 		_absyncProvider.__ioSocket.emit( eventName, data, function afterEmit() {
-			var args = arguments;
-			_rootScope.$apply( function() {
-				if( callback ) {
-					callback.apply( _absyncProvider.__ioSocket, args );
-				}
-			} );
+			if( callback ) {
+				callback.apply( _absyncProvider.__ioSocket, arguments );
+			}
 		} );
-	};
-
-	/**
-	 * Register an event listener on the websocket.
-	 * @param {String} eventName
-	 * @param {Function} callback
-	 * @param {Object} scope
-	 * @returns {Function}
-	 */
-	AbsyncService.prototype.__handleEntityEvent = function AbsyncService$__handleEntityEvent( eventName, callback, scope ) {
-		var _absyncProvider = this.__absyncProvider;
-
-		var wrapper = function() {
-			var args = arguments;
-			scope.$apply( function() {
-				callback.apply( _absyncProvider.__ioSocket, args );
-			} );
-		};
-		_absyncProvider.__ioSocket.on( eventName, wrapper );
-
-		// Return a function that removes the listener.
-		// TODO: This is not currently utilized due to the delayed listener registration approach.
-		return function removeListener() {
-			_absyncProvider.__ioSocket.removeListener( eventName, wrapper );
-		};
 	};
 
 	/**
