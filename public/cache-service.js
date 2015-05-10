@@ -149,7 +149,7 @@
 			// they're doing.
 			rawData[ configuration.collectionName ].forEach( deserializeCollectionEntry );
 
-			// Resolve out "objects are available" deferred.
+			// Resolve our "objects are available" deferred.
 			// TODO: We could just as well initialize objectAvailable to the return value of this call block.
 			_cacheService.__objectsAvailableDeferred.resolve( _cacheService.entityCache );
 
