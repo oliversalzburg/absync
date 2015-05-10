@@ -18,10 +18,11 @@
 	/**
 	 * Retrieves the absync provider.
 	 * @param {angular.auto.IProvideService|Object} $provide The $provide provider
+	 * @param {Function} absyncCache The AbsyncCache service constructor.
 	 * @ngInject
 	 */
-	function getAbsyncProvider( $provide ) {
-		return new AbsyncProvider( $provide );
+	function getAbsyncProvider( $provide, absyncCache ) {
+		return new AbsyncProvider( $provide, absyncCache );
 	}
 
 	/**
