@@ -26,6 +26,7 @@
 	function getServiceConstructor( name, configuration ) {
 		// There is no code here, other than the CacheService definition, followed by "return CacheService;"
 
+		//noinspection JSValidateJSDoc
 		/**
 		 * This service factory is the core of absync.
 		 * It returns a CacheService instance that is specialized to the given configuration.
@@ -200,7 +201,7 @@
 			// We reset the length of the array here, because assigning a new array would possibly conflict
 			// with watchers placed on the original object.
 			_cacheService.entityCache.length = 0;
-			
+
 			// Deserialize the received data and place the models in our cache.
 			_collectionReceived.forEach( addEntityToCache );
 
