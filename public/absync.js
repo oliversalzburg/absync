@@ -43,6 +43,8 @@
 		_absyncProvider.__registerLater = [];
 
 		// The collections that absync provides.
+		// The keys are the names of the collections, the value contains the constructor of
+		// the respective cache service.
 		_absyncProvider.__collections = {};
 	}
 
@@ -103,8 +105,8 @@
 		}
 
 		// Register the service configuration.
-		// absyncCacheServiceFactory will return a constructor for a service with the given configuration.
-		_absyncProvider.__collections[ name ] = absyncCacheServiceFactory( name, configuration );
+		// getServiceConstructor will return a constructor for a service with the given configuration.
+		_absyncProvider.__collections[ name ] = getServiceConstructor( name, configuration );
 
 		// Register the new service.
 		// Yes, we want an Angular "service" here, because we want it constructed with "new".
@@ -215,12 +217,12 @@
 	};
 
 	/**
-	 * This factory serves as a closure to make the configuration available to the cache service.
+	 * A closure to make the configuration available to the cache service.
 	 * @param {String} name The name of the service.
 	 * @param {AbsyncServiceConfiguration} configuration The configuration for this service.
 	 * @returns {CacheService}
 	 */
-	function absyncCacheServiceFactory( name, configuration ) {
+	function getServiceConstructor( name, configuration ) {
 		// There is no code here, other than the CacheService definition, followed by "return CacheService;"
 
 		/**
