@@ -2,93 +2,147 @@
 	"use strict";
 
 	/**
-	 * Please make note of the following variable naming conventions:
+	 * Please make note of the following conventions:
 	 * 1. Function-scope local variables must be prefixed with a single underscore.
 	 *    This indicates a temporary variable.
-	 * 2. Variables that are persisted onto publicly accessible entities must be prefixed with two underscores.
-	 *    This indicates a private variable.
+	 * 2. Private variables that are persisted onto publicly accessible entities must be prefixed with two underscores.
+	 *    This indicates a publicly visible, private variable.
 	 *    Hiding private variables, by using closures, is discouraged.
+	 *    Modifying these values from outside of absync is discouraged, but should be respected whenever possible.
 	 */
 
 	angular
 		.module( "absync" )
 		.provider( "absync", getAbsyncProvider );
 
-	/* @ngInject */
+	/**
+	 * Retrieves the absync provider.
+	 * @param {angular.auto.IProvideService|Object} $provide The $provide provider
+	 * @ngInject
+	 */
 	function getAbsyncProvider( $provide ) {
+		return new AbsyncProvider( $provide );
+	}
+
+	/**
+	 * Retrieves the absync provider.
+	 * @param {angular.auto.IProvideService|Object} $provide The $provide provider
+	 * @constructor
+	 */
+	function AbsyncProvider( $provide ) {
 		var _absyncProvider = this;
 
+		// Store a reference to the provide provider.
+		_absyncProvider.__provide = $provide;
+
+		// A reference to the socket.io instance we're using to receive updates from the server.
 		_absyncProvider.__ioSocket = null;
+		// We usually register event listeners on the socket.io instance right away.
 		// If socket.io was not connected when a service was constructed, we put the registration request
 		// into this array and register it as soon as socket.io is configured.
 		_absyncProvider.__registerLater = [];
 
 		// The collections that absync provides.
+		// The keys are the names of the collections, the value contains the constructor of
+		// the respective cache service.
 		_absyncProvider.__collections = {};
-
-		// Register the configurator on the provider itself to allow early configuration during setup phase.
-		_absyncProvider.configure = function AbsyncProvider$configure( configuration ) {
-			var socket = configuration.socket || configuration;
-			if( typeof socket == "function" ) {
-				// Assume io
-				_absyncProvider.__ioSocket = socket();
-
-			} else if( io && io.Socket && socket instanceof io.Socket ) {
-				// Assume io.Socket
-				_absyncProvider.__ioSocket = socket;
-
-			} else {
-				throw new Error( "configure() expects input to be a function or a socket.io Socket instance." );
-			}
-
-			// Check if services already tried to register listeners, if so, register them now.
-			if( _absyncProvider.__registerLater.length ) {
-				angular.forEach( _absyncProvider.__registerLater, function registerListener( listener ) {
-					this.__handleEntityEvent( listener.eventName, listener.callback, listener.rootScope );
-				} );
-				_absyncProvider.__registerLater = [];
-			}
-		};
-
-		// Request a new synchronized collection.
-		// This only registers the intent to use that collection. It will be constructed when it is first used.
-		_absyncProvider.collection = function AbsyncProvider$collection( name, configuration ) {
-			if( _absyncProvider.__collections[ name ] ) {
-				throw new Error( "A collection with the name '" + name + "' was already requested. Names for collections must be unique." );
-			}
-
-			// Register the service configuration.
-			// absyncCacheServiceFactory will return a constructor for a service with the given configuration.
-			_absyncProvider.__collections[ name ] = absyncCacheServiceFactory( name, configuration );
-
-			// Register the new service.
-			// Yes, we want an Angular "service" here, because we want it constructed with "new".
-			$provide.service( name, _absyncProvider.__collections[ name ] );
-		};
-
-		// Register the service factory.
-		/* @ngInject */
-		_absyncProvider.$get = function absyncProvider$$get( $rootScope ) {
-			return new AbsyncService( this, $rootScope );
-		};
 	}
+
+	/**
+	 * Register the configurator on the provider itself to allow early configuration during setup phase.
+	 * It is recommended to configure absync within a configuration phase of a module.
+	 * @param {io.Socket|Function|Object} configuration The socket.io instance to use.
+	 * Can also be a constructor for a socket.
+	 * Can also be an object with a "socket" member that provides either of the above.
+	 */
+	AbsyncProvider.configure = function AbsyncProvider$configure( configuration ) {
+		var _absyncProvider = this;
+
+		// If the configuration has a "socket" member, unpack it.
+		//noinspection JSUnresolvedVariable
+		var socket = configuration.socket || configuration;
+		// Determine if the socket is an io.Socket.
+		//noinspection JSUnresolvedVariable
+		var isSocket = io && io.Socket && socket instanceof io.Socket;
+
+		if( typeof socket == "function" ) {
+			// Expect the passed socket to be a constructor.
+			_absyncProvider.__ioSocket = socket();
+
+		} else if( isSocket ) {
+			// Expect the passed socket to be an io.Socket instance.
+			_absyncProvider.__ioSocket = socket;
+
+		} else {
+			throw new Error( "configure() expects input to be a function or a socket.io Socket instance." );
+		}
+
+		// Check if services already tried to register listeners, if so, register them now.
+		// This can happen when a service was constructed before absync was configured.
+		if( _absyncProvider.__registerLater.length ) {
+			_absyncProvider.__registerLater.forEach( _absyncProvider.__registerListener );
+			_absyncProvider.__registerLater = [];
+		}
+	};
+
+	AbsyncProvider.prototype.__registerListener = function AbsyncProvider$__registerListener( listener ) {
+		var _absyncProvider = this;
+		_absyncProvider.__handleEntityEvent( listener.eventName, listener.callback );
+	};
+
+	//TODO: Remove this noinspection when WebStorm 11 is available.
+	//noinspection JSValidateJSDoc
+	/**
+	 * Request a new synchronized collection.
+	 * This only registers the intent to use that collection. It will be constructed when it is first used.
+	 * @param {String} name The name of the collection and service name.
+	 * @param {AbsyncServiceConfiguration|Object} configuration The configuration for this collection.
+	 */
+	AbsyncProvider.prototype.collection = function AbsyncProvider$collection( name, configuration ) {
+		var _absyncProvider = this;
+
+		// Collection names (and, thus service names) have to be unique.
+		// We can't create multiple services with the same name.
+		if( _absyncProvider.__collections[ name ] ) {
+			throw new Error( "A collection with the name '" + name + "' was already requested. Names for collections must be unique." );
+		}
+
+		// Register the service configuration.
+		// getServiceConstructor will return a constructor for a service with the given configuration.
+		_absyncProvider.__collections[ name ] = getServiceConstructor( name, configuration );
+
+		// Register the new service.
+		// Yes, we want an Angular "service" here, because we want it constructed with "new".
+		_absyncProvider.__provide.service( name, _absyncProvider.__collections[ name ] );
+	};
+
+	//noinspection JSUnusedGlobalSymbols
+	/**
+	 * Register the service factory.
+	 * @returns {AbsyncService}
+	 * @ngInject
+	 */
+	AbsyncProvider.prototype.$get = function AbsyncProvider$$get() {
+		return new AbsyncService( this );
+	};
+
 
 	/**
 	 * The service that is received when injecting "absync".
 	 * This service is primarily used internally to set up the connection between socket.io and the individual
 	 * caching services.
-	 * @param {Object} parentProvider The AbsyncProvider that provides this service.
-	 * @param {Object} scope The Angular scope to use (usually the root scope).
+	 * @param {AbsyncProvider|Object} parentProvider The AbsyncProvider that provides this service.
 	 * @constructor
 	 */
-	function AbsyncService( parentProvider, scope ) {
+	function AbsyncService( parentProvider ) {
 		this.__absyncProvider = parentProvider;
-		this.__scope = scope;
 	}
 
 	/**
 	 * Configure the socket.io connection for absync.
-	 * @param configuration
+	 * This configuration of absync should usually be performed through the absyncProvider in the configuration
+	 * phase of a module.
+	 * @param {io.Socket|Function|Object} configuration The socket.io instance to use.
 	 */
 	AbsyncService.prototype.configure = function AbsyncService$configure( configuration ) {
 		var _absyncProvider = this.__absyncProvider;
@@ -97,23 +151,51 @@
 
 	/**
 	 * Register an event listener that is called when a specific entity is received on the websocket.
-	 * @param {String} eventName
-	 * @param {Function} callback
+	 * @param {String} eventName The event name, usually the name of the entity.
+	 * @param {Function} callback The function to call when the entity is received.
+	 * @return {Function|null} If the listener could be registered, it returns a function that, when called, removes
+	 * the event listener.
+	 * If the listener registration was delayed, null is returned.
 	 */
 	AbsyncService.prototype.on = function AbsyncService$on( eventName, callback ) {
 		var _absyncProvider = this.__absyncProvider;
 		var _absyncService = this;
 
+		// If we have no configured socket.io connection yet, remember to register it later.
 		if( !_absyncProvider.__ioSocket ) {
+
+			if( _absyncProvider.__registerLater.length > 9999 ) {
+				// Be defensive, something is probably not right here.
+				return null;
+			}
+
+			// TODO: Use promises here, so that we can always return the event listener removal function.
 			_absyncProvider.__registerLater.push( {
 				eventName : eventName,
-				callback  : callback,
-				rootScope : _absyncProvider.__scope
+				callback  : callback
 			} );
-			return;
+			return null;
 		}
 
-		_absyncService.__handleEntityEvent( eventName, callback, _absyncService.__scope );
+		return _absyncService.__handleEntityEvent( eventName, callback );
+	};
+
+	/**
+	 * Register an event listener on the websocket.
+	 * @param {String} eventName The event name, usually the name of the entity.
+	 * @param {Function} callback The function to call when the entity is received.
+	 * @returns {Function}
+	 */
+	AbsyncService.prototype.__handleEntityEvent = function AbsyncService$__handleEntityEvent( eventName, callback ) {
+		var _absyncProvider = this.__absyncProvider;
+
+		// Register the callback with socket.io.
+		_absyncProvider.__ioSocket.on( eventName, callback );
+
+		// Return a function that removes the listener.
+		return function removeListener() {
+			_absyncProvider.__ioSocket.removeListener( eventName, callback );
+		};
 	};
 
 	/**
@@ -121,7 +203,7 @@
 	 * This is not utilized in absync internally.
 	 * @param {String} eventName
 	 * @param {*} data
-	 * @param {Function} callback
+	 * @param {Function} [callback]
 	 */
 	AbsyncService.prototype.emit = function AbsyncService$emit( eventName, data, callback ) {
 		var _absyncProvider = this.__absyncProvider;
@@ -130,62 +212,39 @@
 			throw new Error( "socket.io is not initialized." );
 		}
 
-		var _rootScope = this.rootScope;
-
 		_absyncProvider.__ioSocket.emit( eventName, data, function afterEmit() {
-			var args = arguments;
-			_rootScope.$apply( function() {
-				if( callback ) {
-					callback.apply( _absyncProvider.__ioSocket, args );
-				}
-			} );
+			if( callback ) {
+				callback.apply( _absyncProvider.__ioSocket, arguments );
+			}
 		} );
 	};
 
+	//TODO: Remove this noinspection when WebStorm 11 is available.
+	//noinspection JSValidateJSDoc
 	/**
-	 * Register an event listener on the websocket.
-	 * @param {String} eventName
-	 * @param {Function} callback
-	 * @param {Object} scope
-	 * @returns {Function}
-	 */
-	AbsyncService.prototype.__handleEntityEvent = function AbsyncService$__handleEntityEvent( eventName, callback, scope ) {
-		var _absyncProvider = this.__absyncProvider;
-
-		var wrapper = function() {
-			var args = arguments;
-			scope.$apply( function() {
-				callback.apply( _absyncProvider.__ioSocket, args );
-			} );
-		};
-		_absyncProvider.__ioSocket.on( eventName, wrapper );
-
-		// Return a function that removes the listener.
-		// TODO: This is not currently utilized due to the delayed listener registration approach.
-		return function removeListener() {
-			_absyncProvider.__ioSocket.removeListener( eventName, wrapper );
-		};
-	};
-
-	/**
-	 * This factory serves as a closure to make the configuration available to the cache service.
+	 * A closure to make the configuration available to the cache service.
 	 * @param {String} name The name of the service.
 	 * @param {AbsyncServiceConfiguration} configuration The configuration for this service.
 	 * @returns {CacheService}
 	 */
-	function absyncCacheServiceFactory( name, configuration ) {
+	function getServiceConstructor( name, configuration ) {
 		// There is no code here, other than the CacheService definition, followed by "return CacheService;"
 
 		/**
 		 * This service factory is the core of absync.
 		 * It returns a CacheService instance that is specialized to the given configuration.
 		 * This service will handle keep the stored collection in sync.
+		 * @param {angular.IHttpService|Object} $http
+		 * @param {angular.auto.IInjectorService|Object} $injector
+		 * @param {angular.ILogService|Object} $log
+		 * @param {angular.IQService|Object} $q
+		 * @param {angular.IRootScopeService|Object} $rootScope
+		 * @param {AbsyncService} absync
 		 * @returns {CacheService}
 		 * @ngInject
 		 */
 		function CacheService( $http, $injector, $log, $q, $rootScope, absync ) {
 			var _cacheService = this;
-			$log.info( "absync service '" + name + "' was instantiated." );
 
 			// Retrieve a reference to the model of the collection that is being cached.
 			var _injector = configuration.injector || $injector;
@@ -254,6 +313,8 @@
 			// Wait for data to be available.
 			_cacheService.dataAvailable
 				.then( _cacheService.__onDataAvailable.bind( _cacheService ) );
+
+			_cacheService.logInterface.info( _cacheService.logPrefix + "service was instantiated." );
 		}
 
 		/**
@@ -355,10 +416,11 @@
 			}
 		};
 
+		//noinspection JSUnusedGlobalSymbols
 		/**
 		 * Ensure that the cached collection is retrieved from the server.
 		 * @param {Boolean} [forceReload=false] Should the data be loaded, even if the service already has a local cache?
-		 * @returns {Promise<Array<configuration.model>>}
+		 * @returns {Promise<Array<configuration.model>>|IPromise<Array>|IPromise<void>}
 		 */
 		CacheService.prototype.ensureLoaded = function CacheService$ensureLoaded( forceReload ) {
 			var _cacheService = this;
@@ -372,6 +434,8 @@
 				// If the user did not provide information necessary to work with a collection, immediately return
 				// a promise for an empty collection. The user could still use read() to grab individual entities.
 				if( !configuration.collectionName || !configuration.collectionUri ) {
+					// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+					//noinspection JSValidateTypes
 					return _cacheService.q.when( [] );
 				}
 
@@ -383,6 +447,8 @@
 
 			// Return a promise that is resolved once the data was read and converted to models.
 			// When the promise is resolved, it will return a reference to the entity cache.
+			// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+			//noinspection JSValidateTypes
 			return _cacheService.q.all(
 				[
 					_cacheService.dataAvailable,
@@ -421,7 +487,7 @@
 		 * The entity will be placed into the cache.
 		 * @param {String} id The ID of the entity to retrieve.
 		 * @param {Boolean} [forceReload=false] Should the entity be retrieved from the server, even if it is already in the cache?
-		 * @returns {Promise<configuration.model>}
+		 * @returns {Promise<configuration.model>|IPromise<TResult>|IPromise<void>}
 		 */
 		CacheService.prototype.read = function CacheService$read( id, forceReload ) {
 			var _cacheService = this;
@@ -434,12 +500,16 @@
 				     entityIndex < _cacheService.entityCache.length;
 				     ++entityIndex, entity = _cacheService.entityCache[ entityIndex ] ) {
 					if( entity.id === id ) {
+						// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+						//noinspection JSValidateTypes
 						return _cacheService.q.when( entity );
 					}
 				}
 			}
 
 			// Grab the entity from the backend.
+			// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+			//noinspection JSValidateTypes
 			return _cacheService.httpInterface
 				.get( configuration.entityUri + "/" + id )
 				.then( onEntityRetrieved, onEntityRetrievalFailure );
@@ -475,7 +545,7 @@
 		/**
 		 * Updates an entity and persists it to the backend and the cache.
 		 * @param {configuration.model} entity
-		 * @return {Promise<configuration.model>} A promise that will be resolved with the updated entity.
+		 * @return {Promise<configuration.model>|IPromise<TResult>} A promise that will be resolved with the updated entity.
 		 */
 		CacheService.prototype.update = function CacheService$update( entity ) {
 			var _cacheService = this;
@@ -490,13 +560,18 @@
 			wrappedEntity[ configuration.entityName ] = serialized;
 
 			// Check if the entity has an "id" property, if it has, we will update. Otherwise, we create.
+			//noinspection JSUnresolvedVariable
 			if( "undefined" !== typeof( entity.id ) ) {
+				// TODO: Remove the JSValidateTypes noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+				//noinspection JSValidateTypes,JSUnresolvedVariable
 				return _cacheService.httpInterface
 					.put( configuration.entityUri + "/" + entity.id, wrappedEntity )
 					.then( afterEntityStored, onEntityStorageFailure );
 
 			} else {
 				// Create a new entity
+				// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+				//noinspection JSValidateTypes
 				return _cacheService.httpInterface
 					.post( configuration.collectionUri, wrappedEntity )
 					.then( afterEntityStored, onEntityStorageFailure );
@@ -529,6 +604,7 @@
 			}
 		};
 
+		//noinspection JSUnusedGlobalSymbols
 		/**
 		 * Creates a new entity and persists it to the backend and the cache.
 		 */
@@ -551,8 +627,8 @@
 				return _cacheService.__removeEntityFromCache( entityId );
 			}
 
-			function onEntityDeletionFailed( data, status, headers, config ) {
-				_cacheService.logInterface.error( data );
+			function onEntityDeletionFailed( serverResponse ) {
+				_cacheService.logInterface.error( serverResponse.data );
 				throw new Error( "Unable to delete entity." );
 			}
 		};
@@ -583,7 +659,9 @@
 
 					// Use the "copyFrom" method on the entity, if it exists, otherwise use naive approach.
 					var targetEntity = _cacheService.entityCache[ entityIndex ];
+					//noinspection JSUnresolvedVariable
 					if( typeof targetEntity.copyFrom === "function" ) {
+						//noinspection JSUnresolvedFunction
 						targetEntity.copyFrom( entityToCache );
 
 					} else {
@@ -647,6 +725,7 @@
 			}
 		};
 
+		//noinspection JSUnusedGlobalSymbols
 		/**
 		 * Retrieve an associative array of all cached entities, which uses the ID of the entity records as the key in the array.
 		 * This is a convenience method that is not utilized internally.
@@ -699,6 +778,7 @@
 			return result;
 		};
 
+		//noinspection JSUnusedGlobalSymbols
 		/**
 		 * Populate references to complex types in an instance.
 		 * @param {Object} entity The entity that should be manipulated.
@@ -707,7 +787,7 @@
 		 * type instances which are being referenced in entity.
 		 * @param {Boolean} [force=false] If true, all complex types will be replaced with references to the
 		 * instances in cache; otherwise, only properties that are string representations of complex type IDs will be replaced.
-		 * @returns {Promise}
+		 * @returns {IPromise<TResult>|IPromise<any[]>|IPromise<{}>}
 		 */
 		CacheService.prototype.populateComplex = function CacheService$populateComplex( entity, propertyName, cache, force ) {
 			var _cacheService = this;
@@ -717,6 +797,8 @@
 				// ...map the elements in the array to promises.
 				var promises = entity[ propertyName ].map( mapElementToPromise );
 
+				// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+				//noinspection JSValidateTypes
 				return _cacheService.q.all( promises );
 
 			} else {
@@ -728,15 +810,20 @@
 						entity[ propertyName ] = entity[ propertyName ].id;
 
 					} else {
+						// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+						//noinspection JSValidateTypes
 						return _cacheService.q.when( false );
 					}
 				}
 
 				// Treat the property as an ID and read the complex with that ID from the cache.
+				// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+				//noinspection JSValidateTypes
 				return cache.read( entity[ propertyName ] )
 					.then( onComplexRetrieved );
 			}
 
+			//noinspection JSUnusedLocalSymbols
 			function mapElementToPromise( element, index ) {
 				// We usually assume the properties to be strings (the ID of the referenced complex).
 				if( typeof entity[ propertyName ][ index ] !== "string" ) {
