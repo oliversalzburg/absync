@@ -80,11 +80,14 @@
 		// Check if services already tried to register listeners, if so, register them now.
 		// This can happen when a service was constructed before absync was configured.
 		if( _absyncProvider.__registerLater.length ) {
-			angular.forEach( _absyncProvider.__registerLater, function registerListener( listener ) {
-				this.__handleEntityEvent( listener.eventName, listener.callback );
-			} );
+			_absyncProvider.__registerLater.forEach( _absyncProvider.__registerListener );
 			_absyncProvider.__registerLater = [];
 		}
+	};
+
+	AbsyncProvider.prototype.__registerListener = function AbsyncProvider$__registerListener( listener ) {
+		var _absyncProvider = this;
+		_absyncProvider.__handleEntityEvent( listener.eventName, listener.callback );
 	};
 
 	//TODO: Remove this noinspection when WebStorm 11 is available.
