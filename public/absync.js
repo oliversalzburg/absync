@@ -114,12 +114,11 @@
 	//noinspection JSUnusedGlobalSymbols
 	/**
 	 * Register the service factory.
-	 * @param {angular.IRootScopeService|Object} $rootScope
 	 * @returns {AbsyncService}
 	 * @ngInject
 	 */
-	AbsyncProvider.prototype.$get = function AbsyncProvider$$get( $rootScope ) {
-		return new AbsyncService( this, $rootScope );
+	AbsyncProvider.prototype.$get = function AbsyncProvider$$get() {
+		return new AbsyncService( this );
 	};
 
 
