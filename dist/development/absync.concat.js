@@ -24,12 +24,13 @@
 	/**
 	 * Retrieves the absync provider.
 	 * @param {angular.auto.IProvideService|Object} $provide The $provide provider
+	 * @param {Function} absyncCache The AbsyncCache service constructor.
 	 * @ngInject
 	 */
-	function getAbsyncProvider( $provide ) {
-		return new AbsyncProvider( $provide );
+	function getAbsyncProvider( $provide, absyncCache ) {
+		return new AbsyncProvider( $provide, absyncCache );
 	}
-	getAbsyncProvider.$inject = ["$provide"];
+	getAbsyncProvider.$inject = ["$provide", "absyncCache"];
 
 	/**
 	 * Retrieves the absync provider.
@@ -65,7 +66,7 @@
 	 * Can also be a constructor for a socket.
 	 * Can also be an object with a "socket" member that provides either of the above.
 	 */
-	AbsyncProvider.configure = function AbsyncProvider$configure( configuration ) {
+	AbsyncProvider.prototype.configure = function AbsyncProvider$configure( configuration ) {
 		var _absyncProvider = this;
 
 		// If the configuration has a "socket" member, unpack it.
