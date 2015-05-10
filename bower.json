@@ -1,7 +1,7 @@
 {
   "name": "absync",
   "main": "dist/development/absync.concat.js",
-  "version": "1.0.0-beta2",
+  "version": "1.0.0-beta3",
   "homepage": "https://github.com/oliversalzburg/absync",
   "authors": [
     "Oliver Salzburg <oliver.salzburg@gmail.com>"
