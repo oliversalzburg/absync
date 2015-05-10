@@ -416,10 +416,11 @@
 			}
 		};
 
+		//noinspection JSUnusedGlobalSymbols
 		/**
 		 * Ensure that the cached collection is retrieved from the server.
 		 * @param {Boolean} [forceReload=false] Should the data be loaded, even if the service already has a local cache?
-		 * @returns {Promise<Array<configuration.model>>}
+		 * @returns {Promise<Array<configuration.model>>|IPromise<Array>|IPromise<void>}
 		 */
 		CacheService.prototype.ensureLoaded = function CacheService$ensureLoaded( forceReload ) {
 			var _cacheService = this;
@@ -433,6 +434,8 @@
 				// If the user did not provide information necessary to work with a collection, immediately return
 				// a promise for an empty collection. The user could still use read() to grab individual entities.
 				if( !configuration.collectionName || !configuration.collectionUri ) {
+					// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+					//noinspection JSValidateTypes
 					return _cacheService.q.when( [] );
 				}
 
@@ -444,6 +447,8 @@
 
 			// Return a promise that is resolved once the data was read and converted to models.
 			// When the promise is resolved, it will return a reference to the entity cache.
+			// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+			//noinspection JSValidateTypes
 			return _cacheService.q.all(
 				[
 					_cacheService.dataAvailable,
@@ -482,7 +487,7 @@
 		 * The entity will be placed into the cache.
 		 * @param {String} id The ID of the entity to retrieve.
 		 * @param {Boolean} [forceReload=false] Should the entity be retrieved from the server, even if it is already in the cache?
-		 * @returns {Promise<configuration.model>}
+		 * @returns {Promise<configuration.model>|IPromise<TResult>|IPromise<void>}
 		 */
 		CacheService.prototype.read = function CacheService$read( id, forceReload ) {
 			var _cacheService = this;
@@ -495,12 +500,16 @@
 				     entityIndex < _cacheService.entityCache.length;
 				     ++entityIndex, entity = _cacheService.entityCache[ entityIndex ] ) {
 					if( entity.id === id ) {
+						// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+						//noinspection JSValidateTypes
 						return _cacheService.q.when( entity );
 					}
 				}
 			}
 
 			// Grab the entity from the backend.
+			// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+			//noinspection JSValidateTypes
 			return _cacheService.httpInterface
 				.get( configuration.entityUri + "/" + id )
 				.then( onEntityRetrieved, onEntityRetrievalFailure );
@@ -536,7 +545,7 @@
 		/**
 		 * Updates an entity and persists it to the backend and the cache.
 		 * @param {configuration.model} entity
-		 * @return {Promise<configuration.model>} A promise that will be resolved with the updated entity.
+		 * @return {Promise<configuration.model>|IPromise<TResult>} A promise that will be resolved with the updated entity.
 		 */
 		CacheService.prototype.update = function CacheService$update( entity ) {
 			var _cacheService = this;
@@ -551,13 +560,18 @@
 			wrappedEntity[ configuration.entityName ] = serialized;
 
 			// Check if the entity has an "id" property, if it has, we will update. Otherwise, we create.
+			//noinspection JSUnresolvedVariable
 			if( "undefined" !== typeof( entity.id ) ) {
+				// TODO: Remove the JSValidateTypes noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+				//noinspection JSValidateTypes,JSUnresolvedVariable
 				return _cacheService.httpInterface
 					.put( configuration.entityUri + "/" + entity.id, wrappedEntity )
 					.then( afterEntityStored, onEntityStorageFailure );
 
 			} else {
 				// Create a new entity
+				// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+				//noinspection JSValidateTypes
 				return _cacheService.httpInterface
 					.post( configuration.collectionUri, wrappedEntity )
 					.then( afterEntityStored, onEntityStorageFailure );
@@ -590,6 +604,7 @@
 			}
 		};
 
+		//noinspection JSUnusedGlobalSymbols
 		/**
 		 * Creates a new entity and persists it to the backend and the cache.
 		 */
@@ -612,8 +627,8 @@
 				return _cacheService.__removeEntityFromCache( entityId );
 			}
 
-			function onEntityDeletionFailed( data, status, headers, config ) {
-				_cacheService.logInterface.error( data );
+			function onEntityDeletionFailed( serverResponse ) {
+				_cacheService.logInterface.error( serverResponse.data );
 				throw new Error( "Unable to delete entity." );
 			}
 		};
@@ -644,7 +659,9 @@
 
 					// Use the "copyFrom" method on the entity, if it exists, otherwise use naive approach.
 					var targetEntity = _cacheService.entityCache[ entityIndex ];
+					//noinspection JSUnresolvedVariable
 					if( typeof targetEntity.copyFrom === "function" ) {
+						//noinspection JSUnresolvedFunction
 						targetEntity.copyFrom( entityToCache );
 
 					} else {
@@ -708,6 +725,7 @@
 			}
 		};
 
+		//noinspection JSUnusedGlobalSymbols
 		/**
 		 * Retrieve an associative array of all cached entities, which uses the ID of the entity records as the key in the array.
 		 * This is a convenience method that is not utilized internally.
@@ -760,6 +778,7 @@
 			return result;
 		};
 
+		//noinspection JSUnusedGlobalSymbols
 		/**
 		 * Populate references to complex types in an instance.
 		 * @param {Object} entity The entity that should be manipulated.
@@ -768,7 +787,7 @@
 		 * type instances which are being referenced in entity.
 		 * @param {Boolean} [force=false] If true, all complex types will be replaced with references to the
 		 * instances in cache; otherwise, only properties that are string representations of complex type IDs will be replaced.
-		 * @returns {Promise}
+		 * @returns {IPromise<TResult>|IPromise<any[]>|IPromise<{}>}
 		 */
 		CacheService.prototype.populateComplex = function CacheService$populateComplex( entity, propertyName, cache, force ) {
 			var _cacheService = this;
@@ -778,6 +797,8 @@
 				// ...map the elements in the array to promises.
 				var promises = entity[ propertyName ].map( mapElementToPromise );
 
+				// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+				//noinspection JSValidateTypes
 				return _cacheService.q.all( promises );
 
 			} else {
@@ -789,15 +810,20 @@
 						entity[ propertyName ] = entity[ propertyName ].id;
 
 					} else {
+						// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+						//noinspection JSValidateTypes
 						return _cacheService.q.when( false );
 					}
 				}
 
 				// Treat the property as an ID and read the complex with that ID from the cache.
+				// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+				//noinspection JSValidateTypes
 				return cache.read( entity[ propertyName ] )
 					.then( onComplexRetrieved );
 			}
 
+			//noinspection JSUnusedLocalSymbols
 			function mapElementToPromise( element, index ) {
 				// We usually assume the properties to be strings (the ID of the referenced complex).
 				if( typeof entity[ propertyName ][ index ] !== "string" ) {
