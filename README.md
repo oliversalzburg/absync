@@ -82,7 +82,20 @@ One of the key concepts of absync is that model properties can be decorated with
 	};
 	```
 
-3. Construct caching services in Angular to hold the data:
+3. Configure absync in your Angular app:
+
+	```js
+	angular.module( "app", [ "absync" ] )
+		.config( configure );
+	
+	/* @ngInject */
+	function configure( absyncProvider ) {
+		// io is expected to be the global socket.io instance.
+		absyncProvider.configure( io );
+	}
+	```
+
+4. Construct caching services in Angular to hold the data:
 
 	```js
 	angular
