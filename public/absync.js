@@ -59,7 +59,7 @@
 	 * Can also be a constructor for a socket.
 	 * Can also be an object with a "socket" member that provides either of the above.
 	 */
-	AbsyncProvider.configure = function AbsyncProvider$configure( configuration ) {
+	AbsyncProvider.prototype.configure = function AbsyncProvider$configure( configuration ) {
 		var _absyncProvider = this;
 
 		// If the configuration has a "socket" member, unpack it.
