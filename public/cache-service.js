@@ -199,10 +199,8 @@
 			// When we're receiving a full collection, all data we currently have in our cache is useless.
 			// We reset the length of the array here, because assigning a new array would possibly conflict
 			// with watchers placed on the original object.
-			while( 0 < _cacheService.entityCache.length ) {
-				_cacheService.entityCache.length = 0;
-			}
-
+			_cacheService.entityCache.length = 0;
+			
 			// Deserialize the received data and place the models in our cache.
 			_collectionReceived.forEach( addEntityToCache );
 
