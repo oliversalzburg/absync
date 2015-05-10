@@ -2,23 +2,30 @@
 	"use strict";
 
 	/**
-	 * Please make note of the following variable naming conventions:
+	 * Please make note of the following conventions:
 	 * 1. Function-scope local variables must be prefixed with a single underscore.
 	 *    This indicates a temporary variable.
-	 * 2. Variables that are persisted onto publicly accessible entities must be prefixed with two underscores.
-	 *    This indicates a private variable.
+	 * 2. Private variables that are persisted onto publicly accessible entities must be prefixed with two underscores.
+	 *    This indicates a publicly visible, private variable.
 	 *    Hiding private variables, by using closures, is discouraged.
+	 *    Modifying these values from outside of absync is discouraged, but should be respected whenever possible.
 	 */
 
 	angular
 		.module( "absync" )
 		.provider( "absync", getAbsyncProvider );
 
-	/* @ngInject */
+	/**
+	 * Retrieves the absync provider.
+	 * @param {angular.auto.IProvideService|Object} $provide The $provide provider
+	 * @ngInject
+	 */
 	function getAbsyncProvider( $provide ) {
 		var _absyncProvider = this;
 
+		// A reference to the socket.io instance we're using to receive updates from the server.
 		_absyncProvider.__ioSocket = null;
+		// We usually register event listeners on the socket.io instance right away.
 		// If socket.io was not connected when a service was constructed, we put the registration request
 		// into this array and register it as soon as socket.io is configured.
 		_absyncProvider.__registerLater = [];
@@ -26,15 +33,27 @@
 		// The collections that absync provides.
 		_absyncProvider.__collections = {};
 
-		// Register the configurator on the provider itself to allow early configuration during setup phase.
+		/**
+		 * Register the configurator on the provider itself to allow early configuration during setup phase.
+		 * It is recommended to configure absync within a configuration phase of a module.
+		 * @param {io.Socket|Function|Object} configuration The socket.io instance to use.
+		 * Can also be a constructor for a socket.
+		 * Can also be an object with a "socket" member that provides either of the above.
+		 */
 		_absyncProvider.configure = function AbsyncProvider$configure( configuration ) {
+			// If the configuration has a "socket" member, unpack it.
+			//noinspection JSUnresolvedVariable
 			var socket = configuration.socket || configuration;
+			// Determine if the socket is an io.Socket.
+			//noinspection JSUnresolvedVariable
+			var isSocket = io && io.Socket && socket instanceof io.Socket;
+
 			if( typeof socket == "function" ) {
-				// Assume io
+				// Expect the passed socket to be a constructor.
 				_absyncProvider.__ioSocket = socket();
 
-			} else if( io && io.Socket && socket instanceof io.Socket ) {
-				// Assume io.Socket
+			} else if( isSocket ) {
+				// Expect the passed socket to be an io.Socket instance.
 				_absyncProvider.__ioSocket = socket;
 
 			} else {
@@ -42,6 +61,7 @@
 			}
 
 			// Check if services already tried to register listeners, if so, register them now.
+			// This can happen when a service was constructed before absync was configured.
 			if( _absyncProvider.__registerLater.length ) {
 				angular.forEach( _absyncProvider.__registerLater, function registerListener( listener ) {
 					this.__handleEntityEvent( listener.eventName, listener.callback, listener.rootScope );
@@ -50,9 +70,15 @@
 			}
 		};
 
-		// Request a new synchronized collection.
-		// This only registers the intent to use that collection. It will be constructed when it is first used.
+		/**
+		 * Request a new synchronized collection.
+		 * This only registers the intent to use that collection. It will be constructed when it is first used.
+		 * @param {String} name The name of the collection and service name.
+		 * @param {AbsyncServiceConfiguration|Object} configuration The configuration for this collection.
+		 */
 		_absyncProvider.collection = function AbsyncProvider$collection( name, configuration ) {
+			// Collection names (and, thus service names) have to be unique.
+			// We can't create multiple services with the same name.
 			if( _absyncProvider.__collections[ name ] ) {
 				throw new Error( "A collection with the name '" + name + "' was already requested. Names for collections must be unique." );
 			}
@@ -66,8 +92,12 @@
 			$provide.service( name, _absyncProvider.__collections[ name ] );
 		};
 
-		// Register the service factory.
-		/* @ngInject */
+		/**
+		 * Register the service factory.
+		 * @param {angular.IRootScopeService|Object} $rootScope
+		 * @returns {AbsyncService}
+		 * @ngInject
+		 */
 		_absyncProvider.$get = function absyncProvider$$get( $rootScope ) {
 			return new AbsyncService( this, $rootScope );
 		};
