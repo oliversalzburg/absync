@@ -21,7 +21,19 @@
 	 * @ngInject
 	 */
 	function getAbsyncProvider( $provide ) {
+		return new AbsyncProvider( $provide );
+	}
+
+	/**
+	 * Retrieves the absync provider.
+	 * @param {angular.auto.IProvideService|Object} $provide The $provide provider
+	 * @constructor
+	 */
+	function AbsyncProvider( $provide ) {
 		var _absyncProvider = this;
+
+		// Store a reference to the provide provider.
+		_absyncProvider.__provide = $provide;
 
 		// A reference to the socket.io instance we're using to receive updates from the server.
 		_absyncProvider.__ioSocket = null;
@@ -32,83 +44,87 @@
 
 		// The collections that absync provides.
 		_absyncProvider.__collections = {};
-
-		/**
-		 * Register the configurator on the provider itself to allow early configuration during setup phase.
-		 * It is recommended to configure absync within a configuration phase of a module.
-		 * @param {io.Socket|Function|Object} configuration The socket.io instance to use.
-		 * Can also be a constructor for a socket.
-		 * Can also be an object with a "socket" member that provides either of the above.
-		 */
-		_absyncProvider.configure = function AbsyncProvider$configure( configuration ) {
-			// If the configuration has a "socket" member, unpack it.
-			//noinspection JSUnresolvedVariable
-			var socket = configuration.socket || configuration;
-			// Determine if the socket is an io.Socket.
-			//noinspection JSUnresolvedVariable
-			var isSocket = io && io.Socket && socket instanceof io.Socket;
-
-			if( typeof socket == "function" ) {
-				// Expect the passed socket to be a constructor.
-				_absyncProvider.__ioSocket = socket();
-
-			} else if( isSocket ) {
-				// Expect the passed socket to be an io.Socket instance.
-				_absyncProvider.__ioSocket = socket;
-
-			} else {
-				throw new Error( "configure() expects input to be a function or a socket.io Socket instance." );
-			}
-
-			// Check if services already tried to register listeners, if so, register them now.
-			// This can happen when a service was constructed before absync was configured.
-			if( _absyncProvider.__registerLater.length ) {
-				angular.forEach( _absyncProvider.__registerLater, function registerListener( listener ) {
-					this.__handleEntityEvent( listener.eventName, listener.callback, listener.rootScope );
-				} );
-				_absyncProvider.__registerLater = [];
-			}
-		};
-
-		/**
-		 * Request a new synchronized collection.
-		 * This only registers the intent to use that collection. It will be constructed when it is first used.
-		 * @param {String} name The name of the collection and service name.
-		 * @param {AbsyncServiceConfiguration|Object} configuration The configuration for this collection.
-		 */
-		_absyncProvider.collection = function AbsyncProvider$collection( name, configuration ) {
-			// Collection names (and, thus service names) have to be unique.
-			// We can't create multiple services with the same name.
-			if( _absyncProvider.__collections[ name ] ) {
-				throw new Error( "A collection with the name '" + name + "' was already requested. Names for collections must be unique." );
-			}
-
-			// Register the service configuration.
-			// absyncCacheServiceFactory will return a constructor for a service with the given configuration.
-			_absyncProvider.__collections[ name ] = absyncCacheServiceFactory( name, configuration );
-
-			// Register the new service.
-			// Yes, we want an Angular "service" here, because we want it constructed with "new".
-			$provide.service( name, _absyncProvider.__collections[ name ] );
-		};
-
-		/**
-		 * Register the service factory.
-		 * @param {angular.IRootScopeService|Object} $rootScope
-		 * @returns {AbsyncService}
-		 * @ngInject
-		 */
-		_absyncProvider.$get = function absyncProvider$$get( $rootScope ) {
-			return new AbsyncService( this, $rootScope );
-		};
 	}
+
+	/**
+	 * Register the configurator on the provider itself to allow early configuration during setup phase.
+	 * It is recommended to configure absync within a configuration phase of a module.
+	 * @param {io.Socket|Function|Object} configuration The socket.io instance to use.
+	 * Can also be a constructor for a socket.
+	 * Can also be an object with a "socket" member that provides either of the above.
+	 */
+	AbsyncProvider.configure = function AbsyncProvider$configure( configuration ) {
+		var _absyncProvider = this;
+
+		// If the configuration has a "socket" member, unpack it.
+		//noinspection JSUnresolvedVariable
+		var socket = configuration.socket || configuration;
+		// Determine if the socket is an io.Socket.
+		//noinspection JSUnresolvedVariable
+		var isSocket = io && io.Socket && socket instanceof io.Socket;
+
+		if( typeof socket == "function" ) {
+			// Expect the passed socket to be a constructor.
+			_absyncProvider.__ioSocket = socket();
+
+		} else if( isSocket ) {
+			// Expect the passed socket to be an io.Socket instance.
+			_absyncProvider.__ioSocket = socket;
+
+		} else {
+			throw new Error( "configure() expects input to be a function or a socket.io Socket instance." );
+		}
+
+		// Check if services already tried to register listeners, if so, register them now.
+		// This can happen when a service was constructed before absync was configured.
+		if( _absyncProvider.__registerLater.length ) {
+			angular.forEach( _absyncProvider.__registerLater, function registerListener( listener ) {
+				this.__handleEntityEvent( listener.eventName, listener.callback, listener.rootScope );
+			} );
+			_absyncProvider.__registerLater = [];
+		}
+	};
+
+	/**
+	 * Request a new synchronized collection.
+	 * This only registers the intent to use that collection. It will be constructed when it is first used.
+	 * @param {String} name The name of the collection and service name.
+	 * @param {AbsyncServiceConfiguration|Object} configuration The configuration for this collection.
+	 */
+	AbsyncProvider.prototype.collection = function AbsyncProvider$collection( name, configuration ) {
+		var _absyncProvider = this;
+
+		// Collection names (and, thus service names) have to be unique.
+		// We can't create multiple services with the same name.
+		if( _absyncProvider.__collections[ name ] ) {
+			throw new Error( "A collection with the name '" + name + "' was already requested. Names for collections must be unique." );
+		}
+
+		// Register the service configuration.
+		// absyncCacheServiceFactory will return a constructor for a service with the given configuration.
+		_absyncProvider.__collections[ name ] = absyncCacheServiceFactory( name, configuration );
+
+		// Register the new service.
+		// Yes, we want an Angular "service" here, because we want it constructed with "new".
+		_absyncProvider.__provide.service( name, _absyncProvider.__collections[ name ] );
+	};
+
+	/**
+	 * Register the service factory.
+	 * @param {angular.IRootScopeService|Object} $rootScope
+	 * @returns {AbsyncService}
+	 * @ngInject
+	 */
+	AbsyncProvider.prototype.$get = function AbsyncProvider$$get( $rootScope ) {
+		return new AbsyncService( this, $rootScope );
+	};
 
 	/**
 	 * The service that is received when injecting "absync".
 	 * This service is primarily used internally to set up the connection between socket.io and the individual
 	 * caching services.
-	 * @param {Object} parentProvider The AbsyncProvider that provides this service.
-	 * @param {Object} scope The Angular scope to use (usually the root scope).
+	 * @param {AbsyncProvider|Object} parentProvider The AbsyncProvider that provides this service.
+	 * @param {angular.IScope|Object} scope The Angular scope to use (usually the root scope).
 	 * @constructor
 	 */
 	function AbsyncService( parentProvider, scope ) {
