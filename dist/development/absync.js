@@ -169,7 +169,7 @@
 		// If we have no configured socket.io connection yet, remember to register it later.
 		if( !_absyncProvider.__ioSocket ) {
 
-			if( _absyncProvider.__registerLater.length > 9999 ) {
+			if( _absyncProvider.__registerLater.length > 8192 ) {
 				// Be defensive, something is probably not right here.
 				return null;
 			}

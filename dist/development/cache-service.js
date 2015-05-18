@@ -26,6 +26,7 @@
 	function getServiceConstructor( name, configuration ) {
 		// There is no code here, other than the CacheService definition, followed by "return CacheService;"
 
+		//noinspection JSValidateJSDoc
 		/**
 		 * This service factory is the core of absync.
 		 * It returns a CacheService instance that is specialized to the given configuration.
@@ -150,7 +151,7 @@
 			// they're doing.
 			rawData[ configuration.collectionName ].forEach( deserializeCollectionEntry );
 
-			// Resolve out "objects are available" deferred.
+			// Resolve our "objects are available" deferred.
 			// TODO: We could just as well initialize objectAvailable to the return value of this call block.
 			_cacheService.__objectsAvailableDeferred.resolve( _cacheService.entityCache );
 
@@ -200,9 +201,7 @@
 			// When we're receiving a full collection, all data we currently have in our cache is useless.
 			// We reset the length of the array here, because assigning a new array would possibly conflict
 			// with watchers placed on the original object.
-			while( 0 < _cacheService.entityCache.length ) {
-				_cacheService.entityCache.length = 0;
-			}
+			_cacheService.entityCache.length = 0;
 
 			// Deserialize the received data and place the models in our cache.
 			_collectionReceived.forEach( addEntityToCache );
@@ -257,7 +256,7 @@
 
 			/**
 			 * Invoked when the collection was received from the server.
-			 * @param {Object} serverResponse The reply sent from the server.
+			 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
 			 */
 			function onCollectionReceived( serverResponse ) {
 				if( !serverResponse.data[ configuration.collectionName ] ) {
@@ -270,12 +269,12 @@
 
 			/**
 			 * Invoked when there was an error while trying to retrieve the collection from the server.
-			 * @param {Error} error
+			 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
 			 */
-			function onCollectionRetrievalFailure( error ) {
-				_cacheService.logInterface.error( _cacheService.logPrefix + "Unable to retrieve the collection from the server.", error );
+			function onCollectionRetrievalFailure( serverResponse ) {
+				_cacheService.logInterface.error( _cacheService.logPrefix + "Unable to retrieve the collection from the server.", serverResponse );
 				_cacheService.__entityCacheRaw = null;
-				_cacheService.scope.$emit( "absyncError", error );
+				_cacheService.scope.$emit( "absyncError", serverResponse );
 			}
 		};
 
@@ -313,7 +312,7 @@
 
 			/**
 			 * Invoked when the entity was retrieved from the server.
-			 * @param {Object} serverResponse The reply sent from the server.
+			 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
 			 */
 			function onEntityRetrieved( serverResponse ) {
 				if( !serverResponse.data[ configuration.entityName ] ) {
@@ -331,11 +330,11 @@
 
 			/**
 			 * Invoked when there was an error while trying to retrieve the entity from the server.
-			 * @param {Error} error
+			 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
 			 */
-			function onEntityRetrievalFailure( error ) {
-				_cacheService.logInterface.error( _cacheService.logPrefix + "Unable to retrieve entity with ID '" + id + "' from the server.", error );
-				_cacheService.scope.$emit( "absyncError", error );
+			function onEntityRetrievalFailure( serverResponse ) {
+				_cacheService.logInterface.error( _cacheService.logPrefix + "Unable to retrieve entity with ID '" + id + "' from the server.", serverResponse );
+				_cacheService.scope.$emit( "absyncError", serverResponse );
 			}
 		};
 
@@ -376,7 +375,7 @@
 
 			/**
 			 * Invoked when the entity was stored on the server.
-			 * @param {Object} serverResponse The reply sent from the server.
+			 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
 			 */
 			function afterEntityStored( serverResponse ) {
 				// Writing an entity to the backend will usually invoke an update event to be
@@ -395,9 +394,13 @@
 				throw new Error( "The response from the server was not in the expected format. It should have a member named '" + configuration.entityName + "'." );
 			}
 
-			function onEntityStorageFailure( error ) {
-				_cacheService.logInterface.error( _cacheService.logPrefix + "Unable to store entity on the server.", error );
-				_cacheService.logInterface.error( error );
+			/**
+			 * Invoked when there was an error while trying to store the entity on the server.
+			 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
+			 */
+			function onEntityStorageFailure( serverResponse ) {
+				_cacheService.logInterface.error( _cacheService.logPrefix + "Unable to store entity on the server.", serverResponse );
+				_cacheService.logInterface.error( serverResponse );
 			}
 		};
 
@@ -420,10 +423,19 @@
 				.success( onEntityDeleted )
 				.error( onEntityDeletionFailed );
 
-			function onEntityDeleted() {
+			//noinspection JSUnusedLocalSymbols
+			/**
+			 * Invoked when the entity was deleted from the server.
+			 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
+			 */
+			function onEntityDeleted( serverResponse ) {
 				return _cacheService.__removeEntityFromCache( entityId );
 			}
 
+			/**
+			 * Invoked when there was an error while trying to delete the entity from the server.
+			 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
+			 */
 			function onEntityDeletionFailed( serverResponse ) {
 				_cacheService.logInterface.error( serverResponse.data );
 				throw new Error( "Unable to delete entity." );
