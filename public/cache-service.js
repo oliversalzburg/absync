@@ -215,7 +215,7 @@
 		/**
 		 * Ensure that the cached collection is retrieved from the server.
 		 * @param {Boolean} [forceReload=false] Should the data be loaded, even if the service already has a local cache?
-		 * @returns {Promise<Array<configuration.model>>|IPromise<Array>|IPromise<void>}
+		 * @returns {Promise<Array<configuration.model>>|IPromise<Array>|IPromise<void>|Q.Promise<Array<configuration.model>>}
 		 */
 		CacheService.prototype.ensureLoaded = function CacheService$ensureLoaded( forceReload ) {
 			var _cacheService = this;
@@ -229,7 +229,7 @@
 				// If the user did not provide information necessary to work with a collection, immediately return
 				// a promise for an empty collection. The user could still use read() to grab individual entities.
 				if( !configuration.collectionName || !configuration.collectionUri ) {
-					// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+					// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-15665 is fixed.
 					//noinspection JSValidateTypes
 					return _cacheService.q.when( [] );
 				}
@@ -242,7 +242,7 @@
 
 			// Return a promise that is resolved once the data was read and converted to models.
 			// When the promise is resolved, it will return a reference to the entity cache.
-			// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+			// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-15665 is fixed.
 			//noinspection JSValidateTypes
 			return _cacheService.q.all(
 				[
@@ -295,7 +295,7 @@
 				     entityIndex < _cacheService.entityCache.length;
 				     ++entityIndex, entity = _cacheService.entityCache[ entityIndex ] ) {
 					if( entity.id === id ) {
-						// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+						// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-15665 is fixed.
 						//noinspection JSValidateTypes
 						return _cacheService.q.when( entity );
 					}
@@ -303,7 +303,7 @@
 			}
 
 			// Grab the entity from the backend.
-			// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+			// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-15665 is fixed.
 			//noinspection JSValidateTypes
 			return _cacheService.httpInterface
 				.get( configuration.entityUri + "/" + id )
@@ -357,7 +357,7 @@
 			// Check if the entity has an "id" property, if it has, we will update. Otherwise, we create.
 			//noinspection JSUnresolvedVariable
 			if( "undefined" !== typeof( entity.id ) ) {
-				// TODO: Remove the JSValidateTypes noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+				// TODO: Remove the JSValidateTypes noinspection when https://youtrack.jetbrains.com/issue/WEB-15665 is fixed.
 				//noinspection JSValidateTypes,JSUnresolvedVariable
 				return _cacheService.httpInterface
 					.put( configuration.entityUri + "/" + entity.id, wrappedEntity )
@@ -365,7 +365,7 @@
 
 			} else {
 				// Create a new entity
-				// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+				// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-15665 is fixed.
 				//noinspection JSValidateTypes
 				return _cacheService.httpInterface
 					.post( configuration.collectionUri, wrappedEntity )
@@ -605,7 +605,7 @@
 				// ...map the elements in the array to promises.
 				var promises = entity[ propertyName ].map( mapElementToPromise );
 
-				// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+				// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-15665 is fixed.
 				//noinspection JSValidateTypes
 				return _cacheService.q.all( promises );
 
@@ -618,14 +618,14 @@
 						entity[ propertyName ] = entity[ propertyName ].id;
 
 					} else {
-						// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+						// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-15665 is fixed.
 						//noinspection JSValidateTypes
 						return _cacheService.q.when( false );
 					}
 				}
 
 				// Treat the property as an ID and read the complex with that ID from the cache.
-				// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-16518 is fixed.
+				// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-15665 is fixed.
 				//noinspection JSValidateTypes
 				return cache.read( entity[ propertyName ] )
 					.then( onComplexRetrieved );
