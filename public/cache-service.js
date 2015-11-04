@@ -161,7 +161,12 @@
 			} );
 
 			function deserializeCollectionEntry( rawEntity ) {
-				_cacheService.entityCache.push( _cacheService.deserializer( rawEntity ) );
+				var _entity = _cacheService.deserializer( rawEntity );
+				if( angular.isUndefined( _entity ) ) {
+					$log.warn( "Deserializer returned undefined" );
+				}
+
+				_cacheService.entityCache.push( _entity );
 			}
 		};
 
@@ -183,7 +188,13 @@
 
 			} else {
 				_cacheService.logInterface.debug( _cacheService.logPrefix + "Entity was updated on the server. Updating cache…" );
-				_cacheService.__updateCacheWithEntity( _cacheService.deserializer( _entityReceived ) );
+
+				var _entity = _cacheService.deserializer( _entityReceived );
+				if( angular.isUndefined( _entity ) ) {
+					$log.warn( "Deserializer returned undefined" );
+				}
+
+				_cacheService.__updateCacheWithEntity( _entity );
 			}
 		};
 
@@ -206,8 +217,12 @@
 			_collectionReceived.forEach( addEntityToCache );
 
 			function addEntityToCache( entityReceived ) {
-				var deserialized = _cacheService.deserializer( entityReceived );
-				_cacheService.__updateCacheWithEntity( deserialized );
+				var _entity = _cacheService.deserializer( entityReceived );
+				if( angular.isUndefined( _entity ) ) {
+					$log.warn( "Deserializer returned undefined" );
+				}
+
+				_cacheService.__updateCacheWithEntity( _entity );
 			}
 		};
 
@@ -322,9 +337,13 @@
 				// We do not need to check here if the object already exists in the cache.
 				// While it could be possible that the same entity is retrieved multiple times, __updateCacheWithEntity
 				// will not insert duplicated into the cache.
-				var deserialized = _cacheService.deserializer( serverResponse.data[ configuration.entityName ] );
-				_cacheService.__updateCacheWithEntity( deserialized );
-				return deserialized;
+				var _entity = _cacheService.deserializer( serverResponse.data[ configuration.entityName ] );
+				if( angular.isUndefined( _entity ) ) {
+					$log.warn( "Deserializer returned undefined" );
+				}
+
+				_cacheService.__updateCacheWithEntity( _entity );
+				return _entity;
 			}
 
 			/**
@@ -346,13 +365,17 @@
 			var _cacheService = this;
 
 			// First create a copy of the object, which has complex properties reduced to their respective IDs.
-			var reduced = _cacheService.reduceComplex( entity );
+			var _reduced = _cacheService.reduceComplex( entity );
 			// Now serialize the object.
-			var serialized = _cacheService.serializer( reduced );
+			var _serialized = _cacheService.serializer( _reduced );
+
+			if( angular.isUndefined( _serialized ) ) {
+				$log.warn( "Serializer returned undefined" );
+			}
 
 			// Wrap the entity in a new object, with a single property, named after the entity type.
 			var wrappedEntity = {};
-			wrappedEntity[ configuration.entityName ] = serialized;
+			wrappedEntity[ configuration.entityName ] = _serialized;
 
 			// Check if the entity has an "id" property, if it has, we will update. Otherwise, we create.
 			//noinspection JSUnresolvedVariable
@@ -382,13 +405,17 @@
 				// We still put the updated record we receive here into the cache to ensure early consistency.
 				// TODO: This might actually not be optimal. Consider only handling the websocket update.
 				if( serverResponse.data[ configuration.entityName ] ) {
-					var newEntity = _cacheService.deserializer( serverResponse.data[ configuration.entityName ] );
+					var _newEntity = _cacheService.deserializer( serverResponse.data[ configuration.entityName ] );
+
+					if( angular.isUndefined( _newEntity ) ) {
+						$log.warn( "Deserializer returned undefined" );
+					}
 
 					// If early cache updates are forced, put the return entity into the cache.
 					if( _cacheService.forceEarlyCacheUpdate ) {
-						_cacheService.__updateCacheWithEntity( newEntity );
+						_cacheService.__updateCacheWithEntity( _newEntity );
 					}
-					return newEntity;
+					return _newEntity;
 				}
 				throw new Error( "The response from the server was not in the expected format. It should have a member named '" + configuration.entityName + "'." );
 			}
