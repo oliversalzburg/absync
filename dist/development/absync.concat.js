@@ -652,8 +652,8 @@
 			var entityId = entity.id;
 			return _cacheService.httpInterface
 				.delete( configuration.entityUri + "/" + entityId )
-				.success( onEntityDeleted )
-				.error( onEntityDeletionFailed );
+				.then( onEntityDeleted )
+				.catch( onEntityDeletionFailed );
 
 			//noinspection JSUnusedLocalSymbols
 			/**
