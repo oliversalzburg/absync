@@ -32,6 +32,7 @@
     "gulp-rename": "^1.2.2",
     "gulp-sourcemaps": "^1.5.2",
     "gulp-uglify": "^1.2.0",
+    "jscs": "^2.5.1",
     "slug": "^0.9.1",
     "vinyl-paths": "^1.0.0"
   }
