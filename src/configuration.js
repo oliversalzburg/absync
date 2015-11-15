@@ -1,5 +1,3 @@
-(function() {
-"use strict";
 angular
 	.module( "absync" )
 	.service( "AbsyncServiceConfiguration", AbsyncServiceConfigurationFactory );
@@ -45,4 +43,3 @@ function AbsyncServiceConfiguration( model, collectionUri, entityUri, collection
 
 	this.injector = injector || undefined;
 }
-}());

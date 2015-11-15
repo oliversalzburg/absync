@@ -1,6 +1,6 @@
 module.exports = {
 	// The base working directory.
-	WorkingDirectory : "public",
+	WorkingDirectory : "src",
 	// Where are the source files located? Relative to WorkingDirectory.
 	Sources          : {
 		Scripts : [ "**/*.js", "*.js" ]
