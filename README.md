@@ -1,5 +1,12 @@
 ![](doc/logo.png)
 
+## 2.0 Notice
+2.0 no longer includes the backend data sanitation part that 1.0 provided.
+
+If you still require that functionality, you can rely on the 1.0 code, or have a look at [sanitizr](https://github.com/oliversalzburg/sanitizr).
+
+## Overview
+
 absync is a highly opinionated framework to synchronize data pools in MEAN applications.
 
 It consists of:
