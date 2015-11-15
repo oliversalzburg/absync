@@ -32,24 +32,24 @@ getAbsyncProvider.$inject = ["$provide", "absyncCache"];
  * @constructor
  */
 function AbsyncProvider( $provide, absyncCache ) {
-	var _absyncProvider = this;
+	var self = this;
 
 	// Store a reference to the provide provider.
-	_absyncProvider.__provide = $provide;
+	self.__provide = $provide;
 	// Store a reference to the cache service constructor.
-	_absyncProvider.__absyncCache = absyncCache;
+	self.__absyncCache = absyncCache;
 
 	// A reference to the socket.io instance we're using to receive updates from the server.
-	_absyncProvider.__ioSocket = null;
+	self.__ioSocket = null;
 	// We usually register event listeners on the socket.io instance right away.
 	// If socket.io was not connected when a service was constructed, we put the registration request
 	// into this array and register it as soon as socket.io is configured.
-	_absyncProvider.__registerLater = [];
+	self.__registerLater = [];
 
 	// The collections that absync provides.
 	// The keys are the names of the collections, the value contains the constructor of
 	// the respective cache service.
-	_absyncProvider.__collections = {};
+	self.__collections = {};
 }
 
 /**
@@ -60,22 +60,20 @@ function AbsyncProvider( $provide, absyncCache ) {
  * Can also be an object with a "socket" member that provides either of the above.
  */
 AbsyncProvider.prototype.configure = function AbsyncProvider$configure( configuration ) {
-	var _absyncProvider = this;
+	var self = this;
 
 	// If the configuration has a "socket" member, unpack it.
-	//noinspection JSUnresolvedVariable
 	var socket = configuration.socket || configuration;
 	// Determine if the socket is an io.Socket.
-	//noinspection JSUnresolvedVariable
 	var isSocket = io && io.Socket && socket instanceof io.Socket;
 
 	if( typeof socket == "function" ) {
 		// Expect the passed socket to be a constructor.
-		_absyncProvider.__ioSocket = socket();
+		self.__ioSocket = socket();
 
 	} else if( isSocket ) {
 		// Expect the passed socket to be an io.Socket instance.
-		_absyncProvider.__ioSocket = socket;
+		self.__ioSocket = socket;
 
 	} else {
 		throw new Error( "configure() expects input to be a function or a socket.io Socket instance." );
@@ -83,19 +81,17 @@ AbsyncProvider.prototype.configure = function AbsyncProvider$configure( configur
 
 	// Check if services already tried to register listeners, if so, register them now.
 	// This can happen when a service was constructed before absync was configured.
-	if( _absyncProvider.__registerLater.length ) {
-		_absyncProvider.__registerLater.forEach( _absyncProvider.__registerListener.bind( _absyncProvider ) );
-		_absyncProvider.__registerLater = [];
+	if( self.__registerLater.length ) {
+		self.__registerLater.forEach( self.__registerListener.bind( self ) );
+		self.__registerLater = [];
 	}
 };
 
-AbsyncProvider.prototype.__registerListener = function AbsyncProvider$__registerListener( listener ) {
-	var _absyncProvider = this;
-	_absyncProvider.$get().__handleEntityEvent( listener.eventName, listener.callback );
+AbsyncProvider.prototype.__registerListener = function AbsyncProvider$registerListener( listener ) {
+	var self = this;
+	self.$get().__handleEntityEvent( listener.eventName, listener.callback );
 };
 
-// TODO: Remove this noinspection when WebStorm 11 is available.
-//noinspection JSValidateJSDoc
 /**
  * Request a new synchronized collection.
  * This only registers the intent to use that collection. It will be constructed when it is first used.
@@ -103,24 +99,23 @@ AbsyncProvider.prototype.__registerListener = function AbsyncProvider$__register
  * @param {AbsyncServiceConfiguration|Object} configuration The configuration for this collection.
  */
 AbsyncProvider.prototype.collection = function AbsyncProvider$collection( name, configuration ) {
-	var _absyncProvider = this;
+	var self = this;
 
 	// Collection names (and, thus service names) have to be unique.
 	// We can't create multiple services with the same name.
-	if( _absyncProvider.__collections[ name ] ) {
+	if( self.__collections[ name ] ) {
 		throw new Error( "A collection with the name '" + name + "' was already requested. Names for collections must be unique." );
 	}
 
 	// Register the service configuration.
 	// __absyncCache will return a constructor for a service with the given configuration.
-	_absyncProvider.__collections[ name ] = _absyncProvider.__absyncCache( name, configuration );
+	self.__collections[ name ] = self.__absyncCache( name, configuration );
 
 	// Register the new service.
 	// Yes, we want an Angular "service" here, because we want it constructed with "new".
-	_absyncProvider.__provide.service( name, _absyncProvider.__collections[ name ] );
+	self.__provide.service( name, self.__collections[ name ] );
 };
 
-//noinspection JSUnusedGlobalSymbols
 /**
  * Register the service factory.
  * @returns {AbsyncService}
@@ -163,7 +158,7 @@ AbsyncService.prototype.configure = function AbsyncService$configure( configurat
  */
 AbsyncService.prototype.on = function AbsyncService$on( eventName, callback ) {
 	var _absyncProvider = this.__absyncProvider;
-	var _absyncService  = this;
+	var self  = this;
 
 	// If we have no configured socket.io connection yet, remember to register it later.
 	if( !_absyncProvider.__ioSocket ) {
@@ -181,7 +176,7 @@ AbsyncService.prototype.on = function AbsyncService$on( eventName, callback ) {
 		return null;
 	}
 
-	return _absyncService.__handleEntityEvent( eventName, callback );
+	return self.__handleEntityEvent( eventName, callback );
 };
 
 /**
@@ -190,7 +185,7 @@ AbsyncService.prototype.on = function AbsyncService$on( eventName, callback ) {
  * @param {Function} callback The function to call when the entity is received.
  * @returns {Function}
  */
-AbsyncService.prototype.__handleEntityEvent = function AbsyncService$__handleEntityEvent( eventName, callback ) {
+AbsyncService.prototype.__handleEntityEvent = function AbsyncService$handleEntityEvent( eventName, callback ) {
 	var _absyncProvider = this.__absyncProvider;
 
 	// Register the callback with socket.io.

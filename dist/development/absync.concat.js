@@ -35,24 +35,24 @@ getAbsyncProvider.$inject = ["$provide", "absyncCache"];
  * @constructor
  */
 function AbsyncProvider( $provide, absyncCache ) {
-	var _absyncProvider = this;
+	var self = this;
 
 	// Store a reference to the provide provider.
-	_absyncProvider.__provide = $provide;
+	self.__provide = $provide;
 	// Store a reference to the cache service constructor.
-	_absyncProvider.__absyncCache = absyncCache;
+	self.__absyncCache = absyncCache;
 
 	// A reference to the socket.io instance we're using to receive updates from the server.
-	_absyncProvider.__ioSocket = null;
+	self.__ioSocket = null;
 	// We usually register event listeners on the socket.io instance right away.
 	// If socket.io was not connected when a service was constructed, we put the registration request
 	// into this array and register it as soon as socket.io is configured.
-	_absyncProvider.__registerLater = [];
+	self.__registerLater = [];
 
 	// The collections that absync provides.
 	// The keys are the names of the collections, the value contains the constructor of
 	// the respective cache service.
-	_absyncProvider.__collections = {};
+	self.__collections = {};
 }
 
 /**
@@ -63,22 +63,20 @@ function AbsyncProvider( $provide, absyncCache ) {
  * Can also be an object with a "socket" member that provides either of the above.
  */
 AbsyncProvider.prototype.configure = function AbsyncProvider$configure( configuration ) {
-	var _absyncProvider = this;
+	var self = this;
 
 	// If the configuration has a "socket" member, unpack it.
-	//noinspection JSUnresolvedVariable
 	var socket = configuration.socket || configuration;
 	// Determine if the socket is an io.Socket.
-	//noinspection JSUnresolvedVariable
 	var isSocket = io && io.Socket && socket instanceof io.Socket;
 
 	if( typeof socket == "function" ) {
 		// Expect the passed socket to be a constructor.
-		_absyncProvider.__ioSocket = socket();
+		self.__ioSocket = socket();
 
 	} else if( isSocket ) {
 		// Expect the passed socket to be an io.Socket instance.
-		_absyncProvider.__ioSocket = socket;
+		self.__ioSocket = socket;
 
 	} else {
 		throw new Error( "configure() expects input to be a function or a socket.io Socket instance." );
@@ -86,19 +84,17 @@ AbsyncProvider.prototype.configure = function AbsyncProvider$configure( configur
 
 	// Check if services already tried to register listeners, if so, register them now.
 	// This can happen when a service was constructed before absync was configured.
-	if( _absyncProvider.__registerLater.length ) {
-		_absyncProvider.__registerLater.forEach( _absyncProvider.__registerListener.bind( _absyncProvider ) );
-		_absyncProvider.__registerLater = [];
+	if( self.__registerLater.length ) {
+		self.__registerLater.forEach( self.__registerListener.bind( self ) );
+		self.__registerLater = [];
 	}
 };
 
-AbsyncProvider.prototype.__registerListener = function AbsyncProvider$__registerListener( listener ) {
-	var _absyncProvider = this;
-	_absyncProvider.$get().__handleEntityEvent( listener.eventName, listener.callback );
+AbsyncProvider.prototype.__registerListener = function AbsyncProvider$registerListener( listener ) {
+	var self = this;
+	self.$get().__handleEntityEvent( listener.eventName, listener.callback );
 };
 
-// TODO: Remove this noinspection when WebStorm 11 is available.
-//noinspection JSValidateJSDoc
 /**
  * Request a new synchronized collection.
  * This only registers the intent to use that collection. It will be constructed when it is first used.
@@ -106,24 +102,23 @@ AbsyncProvider.prototype.__registerListener = function AbsyncProvider$__register
  * @param {AbsyncServiceConfiguration|Object} configuration The configuration for this collection.
  */
 AbsyncProvider.prototype.collection = function AbsyncProvider$collection( name, configuration ) {
-	var _absyncProvider = this;
+	var self = this;
 
 	// Collection names (and, thus service names) have to be unique.
 	// We can't create multiple services with the same name.
-	if( _absyncProvider.__collections[ name ] ) {
+	if( self.__collections[ name ] ) {
 		throw new Error( "A collection with the name '" + name + "' was already requested. Names for collections must be unique." );
 	}
 
 	// Register the service configuration.
 	// __absyncCache will return a constructor for a service with the given configuration.
-	_absyncProvider.__collections[ name ] = _absyncProvider.__absyncCache( name, configuration );
+	self.__collections[ name ] = self.__absyncCache( name, configuration );
 
 	// Register the new service.
 	// Yes, we want an Angular "service" here, because we want it constructed with "new".
-	_absyncProvider.__provide.service( name, _absyncProvider.__collections[ name ] );
+	self.__provide.service( name, self.__collections[ name ] );
 };
 
-//noinspection JSUnusedGlobalSymbols
 /**
  * Register the service factory.
  * @returns {AbsyncService}
@@ -166,7 +161,7 @@ AbsyncService.prototype.configure = function AbsyncService$configure( configurat
  */
 AbsyncService.prototype.on = function AbsyncService$on( eventName, callback ) {
 	var _absyncProvider = this.__absyncProvider;
-	var _absyncService  = this;
+	var self  = this;
 
 	// If we have no configured socket.io connection yet, remember to register it later.
 	if( !_absyncProvider.__ioSocket ) {
@@ -184,7 +179,7 @@ AbsyncService.prototype.on = function AbsyncService$on( eventName, callback ) {
 		return null;
 	}
 
-	return _absyncService.__handleEntityEvent( eventName, callback );
+	return self.__handleEntityEvent( eventName, callback );
 };
 
 /**
@@ -193,7 +188,7 @@ AbsyncService.prototype.on = function AbsyncService$on( eventName, callback ) {
  * @param {Function} callback The function to call when the entity is received.
  * @returns {Function}
  */
-AbsyncService.prototype.__handleEntityEvent = function AbsyncService$__handleEntityEvent( eventName, callback ) {
+AbsyncService.prototype.__handleEntityEvent = function AbsyncService$handleEntityEvent( eventName, callback ) {
 	var _absyncProvider = this.__absyncProvider;
 
 	// Register the callback with socket.io.
@@ -241,8 +236,6 @@ angular
 	.module( "absync" )
 	.constant( "absyncCache", getServiceConstructor );
 
-//TODO: Remove this noinspection when WebStorm 11 is available.
-//noinspection JSValidateJSDoc
 /**
  * A closure to make the configuration available to the cache service.
  * @param {String} name The name of the service.
@@ -252,7 +245,6 @@ angular
 function getServiceConstructor( name, configuration ) {
 	// There is no code here, other than the CacheService definition, followed by "return CacheService;"
 
-	//noinspection JSValidateJSDoc
 	/**
 	 * This service factory is the core of absync.
 	 * It returns a CacheService instance that is specialized to the given configuration.
@@ -267,7 +259,7 @@ function getServiceConstructor( name, configuration ) {
 	 * @ngInject
 	 */
 	function CacheService( $http, $injector, $log, $q, $rootScope, absync ) {
-		var _cacheService = this;
+		var self = this;
 
 		// Retrieve a reference to the model of the collection that is being cached.
 		var _injector         = configuration.injector || $injector;
@@ -275,69 +267,69 @@ function getServiceConstructor( name, configuration ) {
 		if( !_injectorHasModel ) {
 			throw new Error( "Unable to construct the '" + name + "' service, because the referenced model '" + configuration.model + "' is not available for injection." );
 		}
-		var _model = (typeof configuration.model === "string" ) ? _injector.get( configuration.model ) : configuration.model;
+		var _model = ( typeof configuration.model === "string" ) ? _injector.get( configuration.model ) : configuration.model;
 
 		// Retrieve the serialization methods.
 		var serializeModel   = _model.serialize || configuration.serialize || serializationNoop;
 		var deserializeModel = _model.deserialize || configuration.deserialize || serializationNoop;
 
 		// Store configuration.
-		_cacheService.name          = name;
-		_cacheService.configuration = configuration;
+		self.name          = name;
+		self.configuration = configuration;
 
 		// The entity cache must be constructed as an empty array, to allow the user to place watchers on it.
 		// We must never replace the cache with a new array, we must always manipulate the existing one.
 		// Otherwise watchers will not behave as the user expects them to.
 		/* @type {Array<configuration.model>} */
-		_cacheService.entityCache = [];
+		self.entityCache = [];
 		// The raw cache is data that hasn't been deserialized and is used internally.
-		_cacheService.__entityCacheRaw = null;
+		self.__entityCacheRaw = null;
 
 		// TODO: Using deferreds is an anti-pattern and probably provides no value here.
-		_cacheService.__dataAvailableDeferred    = $q.defer();
-		_cacheService.__objectsAvailableDeferred = $q.defer();
+		self.__dataAvailableDeferred    = $q.defer();
+		self.__objectsAvailableDeferred = $q.defer();
 		// A promise that is resolved once initial data synchronization has taken place.
-		_cacheService.dataAvailable = _cacheService.__dataAvailableDeferred.promise;
+		self.dataAvailable = self.__dataAvailableDeferred.promise;
 		// A promise that is resolved once the received data is extended to models.
-		_cacheService.objectsAvailable = _cacheService.__objectsAvailableDeferred.promise;
+		self.objectsAvailable = self.__objectsAvailableDeferred.promise;
 
 		// Use $http by default and expose it on the service.
 		// This allows the user to set a different, possibly decorated, HTTP interface for this service.
-		_cacheService.httpInterface = $http;
+		self.httpInterface = $http;
 		// Do the same for our logger.
-		_cacheService.logInterface = $log;
+		self.logInterface = $log;
 		// The scope on which we broadcast all our relevant events.
-		_cacheService.scope = $rootScope;
+		self.scope = $rootScope;
 		// Keep a reference to $q.
-		_cacheService.q = $q;
+		self.q = $q;
 
 		// Prefix log messages with this string.
-		_cacheService.logPrefix = "absync:" + name.toLocaleUpperCase() + " ";
+		self.logPrefix = "absync:" + name.toLocaleUpperCase() + " ";
 
 		// If enabled, entities received in response to a create or update API call, will be put into the cache.
 		// Otherwise, absync will wait for them to be published through the websocket channel.
-		_cacheService.forceEarlyCacheUpdate = false;
+		self.forceEarlyCacheUpdate = false;
 
 		// Expose the serializer/deserializer so that they can be adjusted at any time.
-		_cacheService.serializer   = serializeModel;
-		_cacheService.deserializer = deserializeModel;
+		self.serializer   = serializeModel;
+		self.deserializer = deserializeModel;
 
 		// Tell absync to register an event listener for both our entity and its collection.
 		// When we receive these events, we broadcast an equal Angular event on the root scope.
 		// This way the user can already peek at the data (manipulating it is discouraged though).
-		absync.on( configuration.entityName, _cacheService.__onEntityOnWebsocket.bind( _cacheService ) );
-		absync.on( configuration.collectionName, _cacheService.__onCollectionOnWebsocket.bind( _cacheService ) );
+		absync.on( configuration.entityName, self.__onEntityOnWebsocket.bind( self ) );
+		absync.on( configuration.collectionName, self.__onCollectionOnWebsocket.bind( self ) );
 
 		// Now we listen on the root scope for the same events we're firing above.
 		// This is where our own absync synchronization logic kicks in.
-		$rootScope.$on( configuration.entityName, _cacheService.__onEntityReceived.bind( _cacheService ) );
-		$rootScope.$on( configuration.collectionName, _cacheService.__onCollectionReceived.bind( _cacheService ) );
+		$rootScope.$on( configuration.entityName, self.__onEntityReceived.bind( self ) );
+		$rootScope.$on( configuration.collectionName, self.__onCollectionReceived.bind( self ) );
 
 		// Wait for data to be available.
-		_cacheService.dataAvailable
-			.then( _cacheService.__onDataAvailable.bind( _cacheService ) );
+		self.dataAvailable
+			.then( self.__onDataAvailable.bind( self ) );
 
-		_cacheService.logInterface.info( _cacheService.logPrefix + "service was instantiated." );
+		self.logInterface.info( self.logPrefix + "service was instantiated." );
 	}
 	CacheService.$inject = ["$http", "$injector", "$log", "$q", "$rootScope", "absync"];
 
@@ -347,9 +339,9 @@ function getServiceConstructor( name, configuration ) {
 	 * @param {Object} message
 	 * @private
 	 */
-	CacheService.prototype.__onEntityOnWebsocket = function CacheService$__onEntityOnWebsocket( message ) {
-		var _cacheService = this;
-		_cacheService.scope.$broadcast( configuration.entityName, message[ configuration.entityName ] );
+	CacheService.prototype.__onEntityOnWebsocket = function CacheService$onEntityOnWebsocket( message ) {
+		var self = this;
+		self.scope.$broadcast( configuration.entityName, message[ configuration.entityName ] );
 	};
 
 	/**
@@ -358,9 +350,9 @@ function getServiceConstructor( name, configuration ) {
 	 * @param {Object} message
 	 * @private
 	 */
-	CacheService.prototype.__onCollectionOnWebsocket = function CacheService$__onCollectionOnWebsocket( message ) {
-		var _cacheService = this;
-		_cacheService.scope.$broadcast( configuration.collectionName, message[ configuration.collectionName ] );
+	CacheService.prototype.__onCollectionOnWebsocket = function CacheService$onCollectionOnWebsocket( message ) {
+		var self = this;
+		self.scope.$broadcast( configuration.collectionName, message[ configuration.collectionName ] );
 	};
 
 	/**
@@ -368,10 +360,10 @@ function getServiceConstructor( name, configuration ) {
 	 * @param {Array<Object>} rawData
 	 * @private
 	 */
-	CacheService.prototype.__onDataAvailable = function CacheService$__onDataAvailable( rawData ) {
-		var _cacheService = this;
+	CacheService.prototype.__onDataAvailable = function CacheService$onDataAvailable( rawData ) {
+		var self = this;
 
-		// _cacheService.entityCache is expected to be an empty array.
+		// The symbol self.entityCache is expected to be an empty array.
 		// We initialize it in the constructor to an empty array and we don't expect any writes to have
 		// happened to it. In case writes *did* happen, we assume that whoever wrote to it knows what
 		// they're doing.
@@ -379,16 +371,16 @@ function getServiceConstructor( name, configuration ) {
 
 		// Resolve our "objects are available" deferred.
 		// TODO: We could just as well initialize objectAvailable to the return value of this call block.
-		_cacheService.__objectsAvailableDeferred.resolve( _cacheService.entityCache );
+		self.__objectsAvailableDeferred.resolve( self.entityCache );
 
 		// Notify the rest of the application about a fresh collection.
-		_cacheService.scope.$broadcast( "collectionNew", {
-			service : _cacheService,
-			cache   : _cacheService.entityCache
+		self.scope.$broadcast( "collectionNew", {
+			service : self,
+			cache   : self.entityCache
 		} );
 
 		function deserializeCollectionEntry( rawEntity ) {
-			_cacheService.entityCache.push( _cacheService.deserializer( rawEntity ) );
+			self.entityCache.push( self.deserializer( rawEntity ) );
 		}
 	};
 
@@ -398,19 +390,19 @@ function getServiceConstructor( name, configuration ) {
 	 * @param {Object} args The raw object as it was read from the wire.
 	 * @private
 	 */
-	CacheService.prototype.__onEntityReceived = function CacheService$__onEntityReceived( event, args ) {
-		var _cacheService   = this;
+	CacheService.prototype.__onEntityReceived = function CacheService$onEntityReceived( event, args ) {
+		var self   = this;
 		var _entityReceived = args;
 
 		// Determine if the received record consists ONLY of an id property,
 		// which would mean that this record was deleted from the backend.
 		if( 1 === Object.keys( _entityReceived ).length && _entityReceived.hasOwnProperty( "id" ) ) {
-			_cacheService.logInterface.info( _cacheService.logPrefix + "Entity was deleted from the server. Updating cache…" );
-			_cacheService.__removeEntityFromCache( _entityReceived.id );
+			self.logInterface.info( self.logPrefix + "Entity was deleted from the server. Updating cache…" );
+			self.__removeEntityFromCache( _entityReceived.id );
 
 		} else {
-			_cacheService.logInterface.debug( _cacheService.logPrefix + "Entity was updated on the server. Updating cache…" );
-			_cacheService.__updateCacheWithEntity( _cacheService.deserializer( _entityReceived ) );
+			self.logInterface.debug( self.logPrefix + "Entity was updated on the server. Updating cache…" );
+			self.__updateCacheWithEntity( self.deserializer( _entityReceived ) );
 		}
 	};
 
@@ -420,64 +412,59 @@ function getServiceConstructor( name, configuration ) {
 	 * @param {Array<Object>} args The raw collection as it was read from the wire.
 	 * @private
 	 */
-	CacheService.prototype.__onCollectionReceived = function CacheService$__onCollectionReceived( event, args ) {
-		var _cacheService       = this;
+	CacheService.prototype.__onCollectionReceived = function CacheService$onCollectionReceived( event, args ) {
+		var self       = this;
 		var _collectionReceived = args;
 
 		// When we're receiving a full collection, all data we currently have in our cache is useless.
 		// We reset the length of the array here, because assigning a new array would possibly conflict
 		// with watchers placed on the original object.
-		_cacheService.entityCache.length = 0;
+		self.entityCache.length = 0;
 
 		// Deserialize the received data and place the models in our cache.
 		_collectionReceived.forEach( addEntityToCache );
 
 		function addEntityToCache( entityReceived ) {
-			var deserialized = _cacheService.deserializer( entityReceived );
-			_cacheService.__updateCacheWithEntity( deserialized );
+			var deserialized = self.deserializer( entityReceived );
+			self.__updateCacheWithEntity( deserialized );
 		}
 	};
 
-	//noinspection JSUnusedGlobalSymbols
 	/**
 	 * Ensure that the cached collection is retrieved from the server.
 	 * @param {Boolean} [forceReload=false] Should the data be loaded, even if the service already has a local cache?
 	 * @returns {Promise<Array<configuration.model>>|IPromise<Array>|IPromise<void>|Q.Promise<Array<configuration.model>>}
 	 */
 	CacheService.prototype.ensureLoaded = function CacheService$ensureLoaded( forceReload ) {
-		var _cacheService = this;
+		var self = this;
 
-		forceReload = (forceReload === true);
+		forceReload = forceReload === true;
 
 		// We only perform any loading, if we don't have raw data cached yet, or if we're forced.
-		if( null === _cacheService.__entityCacheRaw || forceReload ) {
-			_cacheService.__entityCacheRaw = [];
+		if( null === self.__entityCacheRaw || forceReload ) {
+			self.__entityCacheRaw = [];
 
 			// If the user did not provide information necessary to work with a collection, immediately return
 			// a promise for an empty collection. The user could still use read() to grab individual entities.
 			if( !configuration.collectionName || !configuration.collectionUri ) {
-				// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-15665 is fixed.
-				//noinspection JSValidateTypes
-				return _cacheService.q.when( [] );
+				return self.q.when( [] );
 			}
 
-			_cacheService.logInterface.info( _cacheService.logPrefix + "Retrieving '" + configuration.collectionName + "' collection…" );
-			_cacheService.httpInterface
+			self.logInterface.info( self.logPrefix + "Retrieving '" + configuration.collectionName + "' collection…" );
+			self.httpInterface
 				.get( configuration.collectionUri )
 				.then( onCollectionReceived, onCollectionRetrievalFailure );
 		}
 
 		// Return a promise that is resolved once the data was read and converted to models.
 		// When the promise is resolved, it will return a reference to the entity cache.
-		// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-15665 is fixed.
-		//noinspection JSValidateTypes
-		return _cacheService.q.all(
+		return self.q.all(
 			[
-				_cacheService.dataAvailable,
-				_cacheService.objectsAvailable
+				self.dataAvailable,
+				self.objectsAvailable
 			] )
 			.then( function dataAvailable() {
-				return _cacheService.entityCache;
+				return self.entityCache;
 			} );
 
 		/**
@@ -489,8 +476,8 @@ function getServiceConstructor( name, configuration ) {
 				throw new Error( "The response from the server was not in the expected format. It should have a member named '" + configuration.collectionName + "'." );
 			}
 
-			_cacheService.__entityCacheRaw = serverResponse.data;
-			_cacheService.__dataAvailableDeferred.resolve( serverResponse.data );
+			self.__entityCacheRaw = serverResponse.data;
+			self.__dataAvailableDeferred.resolve( serverResponse.data );
 		}
 
 		/**
@@ -498,10 +485,10 @@ function getServiceConstructor( name, configuration ) {
 		 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
 		 */
 		function onCollectionRetrievalFailure( serverResponse ) {
-			_cacheService.logInterface.error( _cacheService.logPrefix + "Unable to retrieve the collection from the server.",
+			self.logInterface.error( self.logPrefix + "Unable to retrieve the collection from the server.",
 				serverResponse );
-			_cacheService.__entityCacheRaw = null;
-			_cacheService.scope.$emit( "absyncError", serverResponse );
+			self.__entityCacheRaw = null;
+			self.scope.$emit( "absyncError", serverResponse );
 		}
 	};
 
@@ -513,27 +500,23 @@ function getServiceConstructor( name, configuration ) {
 	 * @returns {Promise<configuration.model>|IPromise<TResult>|IPromise<void>}
 	 */
 	CacheService.prototype.read = function CacheService$read( id, forceReload ) {
-		var _cacheService = this;
+		var self = this;
 
-		forceReload = (forceReload === true);
+		forceReload = forceReload === true;
 
 		if( !forceReload ) {
 			// Check if the entity is in the cache and return instantly if found.
-			for( var entityIndex = 0, entity = _cacheService.entityCache[ 0 ];
-			     entityIndex < _cacheService.entityCache.length;
-			     ++entityIndex, entity = _cacheService.entityCache[ entityIndex ] ) {
+			for( var entityIndex = 0, entity = self.entityCache[ 0 ];
+			     entityIndex < self.entityCache.length;
+			     ++entityIndex, entity = self.entityCache[ entityIndex ] ) {
 				if( entity.id === id ) {
-					// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-15665 is fixed.
-					//noinspection JSValidateTypes
-					return _cacheService.q.when( entity );
+					return self.q.when( entity );
 				}
 			}
 		}
 
 		// Grab the entity from the backend.
-		// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-15665 is fixed.
-		//noinspection JSValidateTypes
-		return _cacheService.httpInterface
+		return self.httpInterface
 			.get( configuration.entityUri + "/" + id )
 			.then( onEntityRetrieved, onEntityRetrievalFailure );
 
@@ -550,8 +533,8 @@ function getServiceConstructor( name, configuration ) {
 			// We do not need to check here if the object already exists in the cache.
 			// While it could be possible that the same entity is retrieved multiple times, __updateCacheWithEntity
 			// will not insert duplicated into the cache.
-			var deserialized = _cacheService.deserializer( serverResponse.data[ configuration.entityName ] );
-			_cacheService.__updateCacheWithEntity( deserialized );
+			var deserialized = self.deserializer( serverResponse.data[ configuration.entityName ] );
+			self.__updateCacheWithEntity( deserialized );
 			return deserialized;
 		}
 
@@ -560,9 +543,9 @@ function getServiceConstructor( name, configuration ) {
 		 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
 		 */
 		function onEntityRetrievalFailure( serverResponse ) {
-			_cacheService.logInterface.error( _cacheService.logPrefix + "Unable to retrieve entity with ID '" + id + "' from the server.",
+			self.logInterface.error( self.logPrefix + "Unable to retrieve entity with ID '" + id + "' from the server.",
 				serverResponse );
-			_cacheService.scope.$emit( "absyncError", serverResponse );
+			self.scope.$emit( "absyncError", serverResponse );
 		}
 	};
 
@@ -572,31 +555,26 @@ function getServiceConstructor( name, configuration ) {
 	 * @return {Promise<configuration.model>|IPromise<TResult>} A promise that will be resolved with the updated entity.
 	 */
 	CacheService.prototype.update = function CacheService$update( entity ) {
-		var _cacheService = this;
+		var self = this;
 
 		// First create a copy of the object, which has complex properties reduced to their respective IDs.
-		var reduced = _cacheService.reduceComplex( entity );
+		var reduced = self.reduceComplex( entity );
 		// Now serialize the object.
-		var serialized = _cacheService.serializer( reduced );
+		var serialized = self.serializer( reduced );
 
 		// Wrap the entity in a new object, with a single property, named after the entity type.
 		var wrappedEntity                         = {};
 		wrappedEntity[ configuration.entityName ] = serialized;
 
 		// Check if the entity has an "id" property, if it has, we will update. Otherwise, we create.
-		//noinspection JSUnresolvedVariable
-		if( "undefined" !== typeof( entity.id ) ) {
-			// TODO: Remove the JSValidateTypes noinspection when https://youtrack.jetbrains.com/issue/WEB-15665 is fixed.
-			//noinspection JSValidateTypes,JSUnresolvedVariable
-			return _cacheService.httpInterface
+		if( "undefined" !== typeof entity.id ) {
+			return self.httpInterface
 				.put( configuration.entityUri + "/" + entity.id, wrappedEntity )
 				.then( afterEntityStored, onEntityStorageFailure );
 
 		} else {
 			// Create a new entity
-			// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-15665 is fixed.
-			//noinspection JSValidateTypes
-			return _cacheService.httpInterface
+			return self.httpInterface
 				.post( configuration.collectionUri, wrappedEntity )
 				.then( afterEntityStored, onEntityStorageFailure );
 		}
@@ -611,11 +589,11 @@ function getServiceConstructor( name, configuration ) {
 			// We still put the updated record we receive here into the cache to ensure early consistency.
 			// TODO: This might actually not be optimal. Consider only handling the websocket update.
 			if( serverResponse.data[ configuration.entityName ] ) {
-				var newEntity = _cacheService.deserializer( serverResponse.data[ configuration.entityName ] );
+				var newEntity = self.deserializer( serverResponse.data[ configuration.entityName ] );
 
 				// If early cache updates are forced, put the return entity into the cache.
-				if( _cacheService.forceEarlyCacheUpdate ) {
-					_cacheService.__updateCacheWithEntity( newEntity );
+				if( self.forceEarlyCacheUpdate ) {
+					self.__updateCacheWithEntity( newEntity );
 				}
 				return newEntity;
 			}
@@ -627,13 +605,12 @@ function getServiceConstructor( name, configuration ) {
 		 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
 		 */
 		function onEntityStorageFailure( serverResponse ) {
-			_cacheService.logInterface.error( _cacheService.logPrefix + "Unable to store entity on the server.",
+			self.logInterface.error( self.logPrefix + "Unable to store entity on the server.",
 				serverResponse );
-			_cacheService.logInterface.error( serverResponse );
+			self.logInterface.error( serverResponse );
 		}
 	};
 
-	//noinspection JSUnusedGlobalSymbols
 	/**
 	 * Creates a new entity and persists it to the backend and the cache.
 	 */
@@ -644,21 +621,20 @@ function getServiceConstructor( name, configuration ) {
 	 * @param {Object} entity
 	 */
 	CacheService.prototype.delete = function CacheService$delete( entity ) {
-		var _cacheService = this;
+		var self = this;
 
 		var entityId = entity.id;
-		return _cacheService.httpInterface
+		return self.httpInterface
 			.delete( configuration.entityUri + "/" + entityId )
 			.then( onEntityDeleted )
 			.catch( onEntityDeletionFailed );
 
-		//noinspection JSUnusedLocalSymbols
 		/**
 		 * Invoked when the entity was deleted from the server.
 		 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
 		 */
 		function onEntityDeleted( serverResponse ) {
-			return _cacheService.__removeEntityFromCache( entityId );
+			return self.__removeEntityFromCache( entityId );
 		}
 
 		/**
@@ -666,7 +642,7 @@ function getServiceConstructor( name, configuration ) {
 		 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
 		 */
 		function onEntityDeletionFailed( serverResponse ) {
-			_cacheService.logInterface.error( serverResponse.data );
+			self.logInterface.error( serverResponse.data );
 			throw new Error( "Unable to delete entity." );
 		}
 	};
@@ -676,30 +652,28 @@ function getServiceConstructor( name, configuration ) {
 	 * @param {Object} entityToCache
 	 * @private
 	 */
-	CacheService.prototype.__updateCacheWithEntity = function CacheService$__updateCacheWithEntity( entityToCache ) {
-		var _cacheService = this;
+	CacheService.prototype.__updateCacheWithEntity = function CacheService$updateCacheWithEntity( entityToCache ) {
+		var self = this;
 
-		_cacheService.logInterface.info( _cacheService.logPrefix + "Updating entity in cache…" );
+		self.logInterface.info( self.logPrefix + "Updating entity in cache…" );
 
 		var found = false;
-		for( var entityIndex = 0, entity = _cacheService.entityCache[ 0 ];
-		     entityIndex < _cacheService.entityCache.length;
-		     ++entityIndex, entity = _cacheService.entityCache[ entityIndex ] ) {
+		for( var entityIndex = 0, entity = self.entityCache[ 0 ];
+		     entityIndex < self.entityCache.length;
+		     ++entityIndex, entity = self.entityCache[ entityIndex ] ) {
 			if( entity.id == entityToCache.id ) {
 				// Allow the user to intervene in the update process, before updating the entity.
-				_cacheService.scope.$broadcast( "beforeEntityUpdated",
+				self.scope.$broadcast( "beforeEntityUpdated",
 					{
-						service : _cacheService,
-						cache   : _cacheService.entityCache,
-						entity  : _cacheService.entityCache[ entityIndex ],
+						service : self,
+						cache   : self.entityCache,
+						entity  : self.entityCache[ entityIndex ],
 						updated : entityToCache
 					} );
 
 				// Use the "copyFrom" method on the entity, if it exists, otherwise use naive approach.
-				var targetEntity = _cacheService.entityCache[ entityIndex ];
-				//noinspection JSUnresolvedVariable
+				var targetEntity = self.entityCache[ entityIndex ];
 				if( typeof targetEntity.copyFrom === "function" ) {
-					//noinspection JSUnresolvedFunction
 					targetEntity.copyFrom( entityToCache );
 
 				} else {
@@ -709,11 +683,11 @@ function getServiceConstructor( name, configuration ) {
 				found = true;
 
 				// After updating the entity, send another event to allow the user to react.
-				_cacheService.scope.$broadcast( "entityUpdated",
+				self.scope.$broadcast( "entityUpdated",
 					{
-						service : _cacheService,
-						cache   : _cacheService.entityCache,
-						entity  : _cacheService.entityCache[ entityIndex ]
+						service : self,
+						cache   : self.entityCache,
+						entity  : self.entityCache[ entityIndex ]
 					} );
 				break;
 			}
@@ -721,10 +695,10 @@ function getServiceConstructor( name, configuration ) {
 
 		// If the entity wasn't found in our records, it's a new entity.
 		if( !found ) {
-			_cacheService.entityCache.push( entityToCache );
-			_cacheService.scope.$broadcast( "entityNew", {
-				service : _cacheService,
-				cache   : _cacheService.entityCache,
+			self.entityCache.push( entityToCache );
+			self.scope.$broadcast( "entityNew", {
+				service : self,
+				cache   : self.entityCache,
 				entity  : entityToCache
 			} );
 		}
@@ -735,27 +709,27 @@ function getServiceConstructor( name, configuration ) {
 	 * @param {String} id The ID of the entity to remove from the cache.
 	 * @private
 	 */
-	CacheService.prototype.__removeEntityFromCache = function CacheService$__removeEntityFromCache( id ) {
-		var _cacheService = this;
+	CacheService.prototype.__removeEntityFromCache = function CacheService$removeEntityFromCache( id ) {
+		var self = this;
 
-		for( var entityIndex = 0, entity = _cacheService.entityCache[ 0 ];
-		     entityIndex < _cacheService.entityCache.length;
-		     ++entityIndex, entity = _cacheService.entityCache[ entityIndex ] ) {
+		for( var entityIndex = 0, entity = self.entityCache[ 0 ];
+		     entityIndex < self.entityCache.length;
+		     ++entityIndex, entity = self.entityCache[ entityIndex ] ) {
 			if( entity.id == id ) {
 				// Before removing the entity, allow the user to react.
-				_cacheService.scope.$broadcast( "beforeEntityRemoved", {
-					service : _cacheService,
-					cache   : _cacheService.entityCache,
+				self.scope.$broadcast( "beforeEntityRemoved", {
+					service : self,
+					cache   : self.entityCache,
 					entity  : entity
 				} );
 
 				// Remove the entity from the cache.
-				_cacheService.entityCache.splice( entityIndex, 1 );
+				self.entityCache.splice( entityIndex, 1 );
 
 				// Send another event to allow the user to take note of the removal.
-				_cacheService.scope.$broadcast( "entityRemoved", {
-					service : _cacheService,
-					cache   : _cacheService.entityCache,
+				self.scope.$broadcast( "entityRemoved", {
+					service : self,
+					cache   : self.entityCache,
 					entity  : entity
 				} );
 				break;
@@ -763,21 +737,20 @@ function getServiceConstructor( name, configuration ) {
 		}
 	};
 
-	//noinspection JSUnusedGlobalSymbols
 	/**
 	 * Retrieve an associative array of all cached entities, which uses the ID of the entity records as the key in the array.
 	 * This is a convenience method that is not utilized internally.
 	 * @returns {Array<configuration.model>}
 	 */
 	CacheService.prototype.lookupTableById = function CacheService$lookupTableById() {
-		var _cacheService = this;
+		var self = this;
 
-		//TODO: Keep a copy of the lookup table and only update it when the cached data updates
+		// TODO: Keep a copy of the lookup table and only update it when the cached data updates
 		var lookupTable = [];
 		for( var entityIndex = 0;
-		     entityIndex < _cacheService.entityCache.length;
+		     entityIndex < self.entityCache.length;
 		     ++entityIndex ) {
-			lookupTable[ _cacheService.entityCache[ entityIndex ].id ] = _cacheService.entityCache[ entityIndex ];
+			lookupTable[ self.entityCache[ entityIndex ].id ] = self.entityCache[ entityIndex ];
 		}
 		return lookupTable;
 	};
@@ -790,7 +763,7 @@ function getServiceConstructor( name, configuration ) {
 	 * @returns {Object|Array} A copy of the input entity, with complex type instances replaced with their respective ID.
 	 */
 	CacheService.prototype.reduceComplex = function CacheService$reduceComplex( entity, arrayInsteadOfObject ) {
-		var _cacheService = this;
+		var self = this;
 
 		var result = arrayInsteadOfObject ? [] : {};
 		for( var propertyName in entity ) {
@@ -800,7 +773,7 @@ function getServiceConstructor( name, configuration ) {
 
 			// Recurse for nested arrays.
 			if( Array.isArray( entity[ propertyName ] ) ) {
-				result[ propertyName ] = _cacheService.reduceComplex( entity[ propertyName ], true );
+				result[ propertyName ] = self.reduceComplex( entity[ propertyName ], true );
 				continue;
 			}
 
@@ -816,7 +789,6 @@ function getServiceConstructor( name, configuration ) {
 		return result;
 	};
 
-	//noinspection JSUnusedGlobalSymbols
 	/**
 	 * Populate references to complex types in an instance.
 	 * @param {Object} entity The entity that should be manipulated.
@@ -828,16 +800,14 @@ function getServiceConstructor( name, configuration ) {
 	 * @returns {IPromise<TResult>|IPromise<any[]>|IPromise<{}>}
 	 */
 	CacheService.prototype.populateComplex = function CacheService$populateComplex( entity, propertyName, cache, force ) {
-		var _cacheService = this;
+		var self = this;
 
 		// If the target property is an array, ...
 		if( Array.isArray( entity[ propertyName ] ) ) {
 			// ...map the elements in the array to promises.
 			var promises = entity[ propertyName ].map( mapElementToPromise );
 
-			// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-15665 is fixed.
-			//noinspection JSValidateTypes
-			return _cacheService.q.all( promises );
+			return self.q.all( promises );
 
 		} else {
 			// We usually assume the properties to be strings (the ID of the referenced complex).
@@ -848,20 +818,15 @@ function getServiceConstructor( name, configuration ) {
 					entity[ propertyName ] = entity[ propertyName ].id;
 
 				} else {
-					// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-15665 is fixed.
-					//noinspection JSValidateTypes
-					return _cacheService.q.when( false );
+					return self.q.when( false );
 				}
 			}
 
 			// Treat the property as an ID and read the complex with that ID from the cache.
-			// TODO: Remove this noinspection when https://youtrack.jetbrains.com/issue/WEB-15665 is fixed.
-			//noinspection JSValidateTypes
 			return cache.read( entity[ propertyName ] )
 				.then( onComplexRetrieved );
 		}
 
-		//noinspection JSUnusedLocalSymbols
 		function mapElementToPromise( element, index ) {
 			// We usually assume the properties to be strings (the ID of the referenced complex).
 			if( typeof entity[ propertyName ][ index ] !== "string" ) {
@@ -871,7 +836,7 @@ function getServiceConstructor( name, configuration ) {
 					entity[ propertyName ][ index ] = entity[ propertyName ][ index ].id;
 
 				} else {
-					return _cacheService.q.when( false );
+					return self.q.when( false );
 				}
 			}
 
