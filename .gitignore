@@ -1,3 +1,4 @@
 node_modules/
 .idea/deployment.xml
 .idea/workspace.xml
+npm-debug.log
