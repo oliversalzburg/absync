@@ -125,7 +125,6 @@ AbsyncProvider.prototype.$get = function AbsyncProvider$$get() {
 	return new AbsyncService( this );
 };
 
-
 /**
  * The service that is received when injecting "absync".
  * This service is primarily used internally to set up the connection between socket.io and the individual
