@@ -3,6 +3,18 @@
   <component name="ProjectCodeStyleSettingsManager">
     <option name="PER_PROJECT_SETTINGS">
       <value>
+        <option name="OTHER_INDENT_OPTIONS">
+          <value>
+            <option name="INDENT_SIZE" value="4" />
+            <option name="CONTINUATION_INDENT_SIZE" value="4" />
+            <option name="TAB_SIZE" value="4" />
+            <option name="USE_TAB_CHARACTER" value="true" />
+            <option name="SMART_TABS" value="true" />
+            <option name="LABEL_INDENT_SIZE" value="0" />
+            <option name="LABEL_INDENT_ABSOLUTE" value="false" />
+            <option name="USE_RELATIVE_INDENTS" value="false" />
+          </value>
+        </option>
         <option name="LINE_SEPARATOR" value="&#10;" />
         <CssCodeStyleSettings>
           <option name="HEX_COLOR_LOWER_CASE" value="true" />
@@ -12,6 +24,7 @@
           <option name="SPACE_BEFORE_PROPERTY_COLON" value="true" />
           <option name="ALIGN_OBJECT_PROPERTIES" value="2" />
           <option name="SPACE_BEFORE_FUNCTION_LEFT_PARENTH" value="false" />
+          <option name="ALIGN_MULTIPLE_ASSIGNMENTS" value="true" />
           <option name="SPACES_WITHIN_OBJECT_LITERAL_BRACES" value="true" />
         </JSCodeStyleSettings>
         <TypeScriptCodeStyleSettings>
@@ -44,6 +57,10 @@
           </indentOptions>
         </codeStyleSettings>
         <codeStyleSettings language="JavaScript">
+          <option name="WHILE_ON_NEW_LINE" value="true" />
+          <option name="ALIGN_MULTILINE_BINARY_OPERATION" value="true" />
+          <option name="ALIGN_MULTILINE_TERNARY_OPERATION" value="true" />
+          <option name="ALIGN_MULTILINE_ARRAY_INITIALIZER_EXPRESSION" value="true" />
           <option name="SPACE_WITHIN_METHOD_CALL_PARENTHESES" value="true" />
           <option name="SPACE_WITHIN_METHOD_PARENTHESES" value="true" />
           <option name="SPACE_WITHIN_IF_PARENTHESES" value="true" />
@@ -57,6 +74,10 @@
           <option name="SPACE_BEFORE_FOR_PARENTHESES" value="false" />
           <option name="SPACE_BEFORE_CATCH_PARENTHESES" value="false" />
           <option name="SPACE_BEFORE_SWITCH_PARENTHESES" value="false" />
+          <option name="CALL_PARAMETERS_WRAP" value="5" />
+          <option name="KEEP_SIMPLE_BLOCKS_IN_ONE_LINE" value="true" />
+          <option name="KEEP_SIMPLE_METHODS_IN_ONE_LINE" value="true" />
+          <option name="ARRAY_INITIALIZER_WRAP" value="5" />
           <indentOptions>
             <option name="USE_TAB_CHARACTER" value="true" />
             <option name="SMART_TABS" value="true" />

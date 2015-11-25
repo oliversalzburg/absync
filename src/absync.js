@@ -1,5 +1,3 @@
-(function() {
-"use strict";
 /**
  * Please make note of the following conventions:
  * 1. Function-scope local variables must be prefixed with a single underscore.
@@ -23,7 +21,6 @@ angular
 function getAbsyncProvider( $provide, absyncCache ) {
 	return new AbsyncProvider( $provide, absyncCache );
 }
-getAbsyncProvider.$inject = ["$provide", "absyncCache"];
 
 /**
  * Retrieves the absync provider.
@@ -216,4 +213,3 @@ AbsyncService.prototype.emit = function AbsyncService$emit( eventName, data, cal
 		}
 	} );
 };
-}());

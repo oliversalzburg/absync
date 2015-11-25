@@ -2,9 +2,9 @@
 <project version="4">
   <component name="Encoding" useUTFGuessing="true" native2AsciiForPropertiesFiles="false" defaultCharsetForPropertiesFiles="UTF-8">
     <file url="file://$PROJECT_DIR$/.gitignore" charset="UTF-8" />
-    <file url="file://$PROJECT_DIR$/lib/transaction/conductor.js" charset="UTF-8" />
-    <file url="file://$PROJECT_DIR$/lib/transaction/websockets.js" charset="UTF-8" />
-    <file url="file://$PROJECT_DIR$/lib/type" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/../sanitizr/lib/transaction/conductor.js" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/../sanitizr/lib/transaction/websockets.js" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/../sanitizr/lib/type" charset="UTF-8" />
     <file url="PROJECT" charset="UTF-8" />
   </component>
 </project>

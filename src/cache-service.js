@@ -1,5 +1,3 @@
-(function() {
-"use strict";
 /**
  * Please make note of the following conventions:
  * 1. Function-scope local variables must be prefixed with a single underscore.
@@ -109,7 +107,6 @@ function getServiceConstructor( name, configuration ) {
 
 		self.logInterface.info( self.logPrefix + "service was instantiated." );
 	}
-	CacheService.$inject = ["$http", "$injector", "$log", "$q", "$rootScope", "absync"];
 
 	/**
 	 * Invoked when an entity is received on a websocket.
@@ -640,4 +637,3 @@ function getServiceConstructor( name, configuration ) {
 function serializationNoop( model ) {
 	return model;
 }
-}());
