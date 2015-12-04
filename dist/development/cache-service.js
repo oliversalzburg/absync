@@ -55,11 +55,11 @@ function getServiceConstructor( name, configuration ) {
 		self.name          = name;
 		self.configuration = configuration;
 
-		// The entity cache must be constructed as an empty array, to allow the user to place watchers on it.
-		// We must never replace the cache with a new array, we must always manipulate the existing one.
+		// The entity cache must be constructed as an empty array or object, to allow the user to place watchers on it.
+		// We must never replace the cache with a new array or object, we must always manipulate the existing one.
 		// Otherwise watchers will not behave as the user expects them to.
-		/* @type {Array<configuration.model>} */
-		self.entityCache = [];
+		/* @type {Array<configuration.model>|configuration.model} */
+		self.entityCache = configuration.collectionName ? [] : {};
 		// The raw cache is data that hasn't been deserialized and is used internally.
 		self.__entityCacheRaw = null;
 
@@ -135,30 +135,47 @@ function getServiceConstructor( name, configuration ) {
 
 	/**
 	 * Event handler for when the initial badge of raw data becomes available.
-	 * @param {Array<Object>} rawData
+	 * @param {Array<Object>|Object} rawData
 	 * @private
 	 */
 	CacheService.prototype.__onDataAvailable = function CacheService$onDataAvailable( rawData ) {
 		var self = this;
 
-		// The symbol self.entityCache is expected to be an empty array.
-		// We initialize it in the constructor to an empty array and we don't expect any writes to have
-		// happened to it. In case writes *did* happen, we assume that whoever wrote to it knows what
-		// they're doing.
-		rawData[ configuration.collectionName ].forEach( deserializeCollectionEntry );
+		if( Array.isArray( self.entityCache ) ) {
+			// The symbol self.entityCache is expected to be an empty array.
+			// We initialize it in the constructor to an empty array and we don't expect any writes to have
+			// happened to it. In case writes *did* happen, we assume that whoever wrote to it knows what
+			// they're doing.
+			rawData[ configuration.collectionName ].forEach( deserializeCollectionEntry );
 
-		// Resolve our "objects are available" deferred.
-		// TODO: We could just as well initialize objectAvailable to the return value of this call block.
-		self.__objectsAvailableDeferred.resolve( self.entityCache );
+			// Resolve our "objects are available" deferred.
+			// TODO: We could just as well initialize objectAvailable to the return value of this call block.
+			self.__objectsAvailableDeferred.resolve( self.entityCache );
 
-		// Notify the rest of the application about a fresh collection.
-		self.scope.$broadcast( "collectionNew", {
-			service : self,
-			cache   : self.entityCache
-		} );
+			// Notify the rest of the application about a fresh collection.
+			self.scope.$broadcast( "collectionNew", {
+				service : self,
+				cache   : self.entityCache
+			} );
 
-		function deserializeCollectionEntry( rawEntity ) {
-			self.entityCache.push( self.deserializer( rawEntity ) );
+			function deserializeCollectionEntry( rawEntity ) {
+				self.entityCache.push( self.deserializer( rawEntity ) );
+			}
+
+		} else {
+			var deserialized = self.deserializer( rawData[ configuration.entityName ] );
+			self.__updateCacheWithEntity( deserialized );
+
+			// Resolve our "objects are available" deferred.
+			// TODO: We could just as well initialize objectAvailable to the return value of this call block.
+			self.__objectsAvailableDeferred.resolve( self.entityCache );
+
+			// Notify the rest of the application about a fresh entity.
+			self.scope.$broadcast( "entityNew", {
+				service : self,
+				cache   : self.entityCache,
+				entity  : deserialized
+			} );
 		}
 	};
 
@@ -169,7 +186,7 @@ function getServiceConstructor( name, configuration ) {
 	 * @private
 	 */
 	CacheService.prototype.__onEntityReceived = function CacheService$onEntityReceived( event, args ) {
-		var self   = this;
+		var self            = this;
 		var _entityReceived = args;
 
 		// Determine if the received record consists ONLY of an id property,
@@ -191,7 +208,7 @@ function getServiceConstructor( name, configuration ) {
 	 * @private
 	 */
 	CacheService.prototype.__onCollectionReceived = function CacheService$onCollectionReceived( event, args ) {
-		var self       = this;
+		var self                = this;
 		var _collectionReceived = args;
 
 		// When we're receiving a full collection, all data we currently have in our cache is useless.
@@ -222,16 +239,25 @@ function getServiceConstructor( name, configuration ) {
 		if( null === self.__entityCacheRaw || forceReload ) {
 			self.__entityCacheRaw = [];
 
-			// If the user did not provide information necessary to work with a collection, immediately return
-			// a promise for an empty collection. The user could still use read() to grab individual entities.
 			if( !configuration.collectionName || !configuration.collectionUri ) {
-				return self.q.when( [] );
-			}
+				if( configuration.entityName && configuration.entityUri ) {
+					self.__entityCacheRaw = {};
+					self.httpInterface
+						.get( configuration.entityUri )
+						.then( onSingleEntityReceived, onSingleEntityRetrievalFailure );
 
-			self.logInterface.info( self.logPrefix + "Retrieving '" + configuration.collectionName + "' collection…" );
-			self.httpInterface
-				.get( configuration.collectionUri )
-				.then( onCollectionReceived, onCollectionRetrievalFailure );
+				} else {
+					// If the user did not provide information necessary to work with a collection, immediately return
+					// a promise for an empty collection. The user could still use read() to grab individual entities.
+					return self.q.when( [] );
+				}
+
+			} else {
+				self.logInterface.info( self.logPrefix + "Retrieving '" + configuration.collectionName + "' collection…" );
+				self.httpInterface
+					.get( configuration.collectionUri )
+					.then( onCollectionReceived, onCollectionRetrievalFailure );
+			}
 		}
 
 		// Return a promise that is resolved once the data was read and converted to models.
@@ -268,6 +294,30 @@ function getServiceConstructor( name, configuration ) {
 			self.__entityCacheRaw = null;
 			self.scope.$emit( "absyncError", serverResponse );
 		}
+
+		/**
+		 * Invoked when the entity was received from the server.
+		 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
+		 */
+		function onSingleEntityReceived( serverResponse ) {
+			if( !serverResponse.data[ configuration.entityName ] ) {
+				throw new Error( "The response from the server was not in the expected format. It should have a member named '" + configuration.entityName + "'." );
+			}
+
+			self.__entityCacheRaw = serverResponse.data;
+			self.__dataAvailableDeferred.resolve( serverResponse.data );
+		}
+
+		/**
+		 * Invoked when there was an error while trying to retrieve the entity from the server.
+		 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
+		 */
+		function onSingleEntityRetrievalFailure( serverResponse ) {
+			self.logInterface.error( self.logPrefix + "Unable to retrieve the entity from the server.",
+				serverResponse );
+			self.__entityCacheRaw = null;
+			self.scope.$emit( "absyncError", serverResponse );
+		}
 	};
 
 	/**
@@ -293,9 +343,11 @@ function getServiceConstructor( name, configuration ) {
 			}
 		}
 
+		var requestUri = configuration.entityUri + ( id ? ( "/" + id ) : "" );
+
 		// Grab the entity from the backend.
 		return self.httpInterface
-			.get( configuration.entityUri + "/" + id )
+			.get( requestUri )
 			.then( onEntityRetrieved, onEntityRetrievalFailure );
 
 		/**
@@ -434,6 +486,33 @@ function getServiceConstructor( name, configuration ) {
 		var self = this;
 
 		self.logInterface.info( self.logPrefix + "Updating entity in cache…" );
+
+		if( !Array.isArray( self.entityCache ) ) {
+			// Allow the user to intervene in the update process, before updating the entity.
+			self.scope.$broadcast( "beforeEntityUpdated",
+				{
+					service : self,
+					cache   : self.entityCache,
+					entity  : self.entityCache,
+					updated : entityToCache
+				} );
+
+			if( typeof self.entityCache.copyFrom === "function" ) {
+				self.entityCache.copyFrom( entityToCache );
+
+			} else {
+				angular.extend( self.entityCache, entityToCache );
+			}
+
+			// After updating the entity, send another event to allow the user to react.
+			self.scope.$broadcast( "entityUpdated",
+				{
+					service : self,
+					cache   : self.entityCache,
+					entity  : self.entityCache
+				} );
+			return;
+		}
 
 		var found = false;
 		for( var entityIndex = 0, entity = self.entityCache[ 0 ];
