@@ -4,7 +4,7 @@
   "description": "absync",
   "main": "dist/development/absync.concat.js",
   "scripts": {
-    "test": "./node_modules/.bin/karma start --single-run --browsers PhantomJS2"
+    "test": "./node_modules/.bin/karma start --single-run --browsers PhantomJS"
   },
   "repository": {
     "type": "git",
@@ -40,9 +40,10 @@
     "karma-chai": "~0.1.0",
     "karma-chrome-launcher": "~0.2.1",
     "karma-mocha": "~0.2.1",
-    "karma-phantomjs2-launcher": "~0.3.2",
+    "karma-phantomjs-launcher": "~0.2.1",
     "mocha": "~2.3.4",
-    "phantomjs2": "davidchin/phantomjs2#reinstate_bin",
+    "phantomjs": "~1.9.19",
+    "phantomjs-polyfill": "~0.0.1",
     "slug": "~0.9.1",
     "vinyl-paths": "~2.1.0"
   }
