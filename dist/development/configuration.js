@@ -1,5 +1,7 @@
 (function() {
 "use strict";
+/* globals angular */
+
 angular
 	.module( "absync" )
 	.service( "AbsyncServiceConfiguration", AbsyncServiceConfigurationFactory );

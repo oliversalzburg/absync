@@ -1,5 +1,7 @@
 (function() {
 "use strict";
+/* globals angular */
+
 /**
  * Please make note of the following conventions:
  * 1. Function-scope local variables must be prefixed with a single underscore.
@@ -158,6 +160,10 @@ function getServiceConstructor( name, configuration ) {
 				cache   : self.entityCache
 			} );
 
+			function deserializeCollectionEntry( rawEntity ) {
+				self.entityCache.push( self.deserializer( rawEntity ) );
+			}
+
 		} else {
 			var deserialized = self.deserializer( rawData[ configuration.entityName ] );
 			self.__updateCacheWithEntity( deserialized );
@@ -172,10 +178,6 @@ function getServiceConstructor( name, configuration ) {
 				cache   : self.entityCache,
 				entity  : deserialized
 			} );
-		}
-
-		function deserializeCollectionEntry( rawEntity ) {
-			self.entityCache.push( self.deserializer( rawEntity ) );
 		}
 	};
 

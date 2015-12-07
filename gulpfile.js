@@ -5,6 +5,8 @@ var config      = require( "./gulp.config.js" );
 var del         = require( "del" );
 var gulp        = require( "gulp" );
 var jscs        = require( "gulp-jscs" );
+var jshint      = require( "gulp-jshint" );
+var jsValidate  = require( "gulp-jsvalidate" );
 var ngAnnotate  = require( "gulp-ng-annotate" );
 var order       = require( "gulp-order" );
 var path        = require( "path" );
@@ -12,6 +14,7 @@ var remember    = require( "gulp-remember" );
 var rename      = require( "gulp-rename" );
 var slug        = require( "slug" );
 var sourcemaps  = require( "gulp-sourcemaps" );
+var stylish     = require( "jshint-stylish" );
 var uglify      = require( "gulp-uglify" );
 var vinylPaths  = require( "vinyl-paths" );
 var wrapper     = require( "gulp-wrapper" );
@@ -41,6 +44,7 @@ function buildJs() {
 	return sourceStream
 		.pipe( jscs() )
 		.pipe( jscs.reporter() )
+		.pipe( jsValidate() )
 		.pipe( order() )
 		// Only pass through files that have changed since the last build iteration (relevant during "watch").
 		.pipe( cached( path.join( config.Output.Production, config.Output.DirectoryNames.Scripts ) ) )
@@ -50,6 +54,9 @@ function buildJs() {
 			header : "(function() {\n\"use strict\";\n",
 			footer : "}());"
 		} ) )
+		.pipe( jsValidate() )
+		.pipe( jshint() )
+		.pipe( jshint.reporter( stylish ) )
 		// Put Angular dependency injection annotation where needed.
 		.pipe( ngAnnotate() )
 		// Pull out files which haven't changed since our last build iteration and put them back into the stream.

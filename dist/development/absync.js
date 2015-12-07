@@ -1,5 +1,7 @@
 (function() {
 "use strict";
+/* globals angular, io */
+
 /**
  * Please make note of the following conventions:
  * 1. Function-scope local variables must be prefixed with a single underscore.

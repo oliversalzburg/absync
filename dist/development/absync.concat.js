@@ -1,8 +1,12 @@
 (function() {
 "use strict";
+/* globals angular */
+
 angular.module( "absync", [] );
 }());;(function() {
 "use strict";
+/* globals angular, io */
+
 /**
  * Please make note of the following conventions:
  * 1. Function-scope local variables must be prefixed with a single underscore.
@@ -256,6 +260,8 @@ AbsyncService.prototype.emit = function AbsyncService$emit( eventName, data, cal
 };
 }());;(function() {
 "use strict";
+/* globals angular */
+
 /**
  * Please make note of the following conventions:
  * 1. Function-scope local variables must be prefixed with a single underscore.
@@ -414,6 +420,10 @@ function getServiceConstructor( name, configuration ) {
 				cache   : self.entityCache
 			} );
 
+			function deserializeCollectionEntry( rawEntity ) {
+				self.entityCache.push( self.deserializer( rawEntity ) );
+			}
+
 		} else {
 			var deserialized = self.deserializer( rawData[ configuration.entityName ] );
 			self.__updateCacheWithEntity( deserialized );
@@ -428,10 +438,6 @@ function getServiceConstructor( name, configuration ) {
 				cache   : self.entityCache,
 				entity  : deserialized
 			} );
-		}
-
-		function deserializeCollectionEntry( rawEntity ) {
-			self.entityCache.push( self.deserializer( rawEntity ) );
 		}
 	};
 
@@ -977,6 +983,8 @@ function serializationNoop( model ) {
 }
 }());;(function() {
 "use strict";
+/* globals angular */
+
 angular
 	.module( "absync" )
 	.service( "AbsyncServiceConfiguration", AbsyncServiceConfigurationFactory );
