@@ -39,7 +39,7 @@
     "karma-mocha": "~0.2.1",
     "karma-phantomjs2-launcher": "~0.3.2",
     "mocha": "~2.3.4",
-    "phantomjs2": "~2.0.1",
+    "phantomjs2": "davidchin/phantomjs2#reinstate_bin",
     "slug": "~0.9.1",
     "vinyl-paths": "~2.1.0"
   }
