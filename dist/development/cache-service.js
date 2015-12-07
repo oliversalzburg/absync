@@ -160,10 +160,6 @@ function getServiceConstructor( name, configuration ) {
 				cache   : self.entityCache
 			} );
 
-			function deserializeCollectionEntry( rawEntity ) {
-				self.entityCache.push( self.deserializer( rawEntity ) );
-			}
-
 		} else {
 			var deserialized = self.deserializer( rawData[ configuration.entityName ] );
 			self.__updateCacheWithEntity( deserialized );
@@ -178,6 +174,10 @@ function getServiceConstructor( name, configuration ) {
 				cache   : self.entityCache,
 				entity  : deserialized
 			} );
+		}
+
+		function deserializeCollectionEntry( rawEntity ) {
+			self.entityCache.push( self.deserializer( rawEntity ) );
 		}
 	};
 
