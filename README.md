@@ -1,5 +1,7 @@
 ![](doc/logo.png)
 
+[![Build Status](https://travis-ci.org/oliversalzburg/absync.svg?branch=master)](https://travis-ci.org/oliversalzburg/absync)
+
 ## 2.0 Notice
 2.0 no longer includes the backend data sanitation part that 1.0 provided.
 

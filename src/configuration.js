@@ -1,3 +1,5 @@
+/* globals angular */
+
 angular
 	.module( "absync" )
 	.service( "AbsyncServiceConfiguration", AbsyncServiceConfigurationFactory );

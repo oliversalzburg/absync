@@ -1,5 +1,7 @@
 (function() {
 "use strict";
+/* globals angular, io */
+
 /**
  * Please make note of the following conventions:
  * 1. Function-scope local variables must be prefixed with a single underscore.
@@ -50,6 +52,11 @@ function AbsyncProvider( $provide, absyncCache ) {
 	// The keys are the names of the collections, the value contains the constructor of
 	// the respective cache service.
 	self.__collections = {};
+
+	// The entities that absync provides.
+	// The keys are the names of the entities, the value contains the constructor of
+	// the respective cache service.
+	self.__entities = {};
 }
 
 /**
@@ -101,10 +108,13 @@ AbsyncProvider.prototype.__registerListener = function AbsyncProvider$registerLi
 AbsyncProvider.prototype.collection = function AbsyncProvider$collection( name, configuration ) {
 	var self = this;
 
-	// Collection names (and, thus service names) have to be unique.
+	// Collection/entity names (and, thus service names) have to be unique.
 	// We can't create multiple services with the same name.
 	if( self.__collections[ name ] ) {
 		throw new Error( "A collection with the name '" + name + "' was already requested. Names for collections must be unique." );
+	}
+	if( self.__entities[ name ] ) {
+		throw new Error( "An entity with the name '" + name + "' was already requested. Names for collections must be unique and can't be shared with entities." );
 	}
 
 	// Register the service configuration.
@@ -114,6 +124,33 @@ AbsyncProvider.prototype.collection = function AbsyncProvider$collection( name, 
 	// Register the new service.
 	// Yes, we want an Angular "service" here, because we want it constructed with "new".
 	self.__provide.service( name, self.__collections[ name ] );
+};
+
+/**
+ * Request a new synchronized entity.
+ * This only registers the intent to use that entity. It will be constructed when it is first used.
+ * @param {String} name The name of the entity and service name.
+ * @param {AbsyncServiceConfiguration|Object} configuration The configuration for this entity.
+ */
+AbsyncProvider.prototype.entity = function AbsyncProvider$entity( name, configuration ) {
+	var self = this;
+
+	// Collection/entity names (and, thus service names) have to be unique.
+	// We can't create multiple services with the same name.
+	if( self.__entities[ name ] ) {
+		throw new Error( "An entity with the name '" + name + "' was already requested. Names for entities must be unique." );
+	}
+	if( self.__collections[ name ] ) {
+		throw new Error( "A collection with the name '" + name + "' was already requested. Names for entities must be unique and can't be shared with collections." );
+	}
+
+	// Register the service configuration.
+	// __absyncCache will return a constructor for a service with the given configuration.
+	self.__entities[ name ] = self.__absyncCache( name, configuration );
+
+	// Register the new service.
+	// Yes, we want an Angular "service" here, because we want it constructed with "new".
+	self.__provide.service( name, self.__entities[ name ] );
 };
 
 /**
@@ -157,7 +194,7 @@ AbsyncService.prototype.configure = function AbsyncService$configure( configurat
  */
 AbsyncService.prototype.on = function AbsyncService$on( eventName, callback ) {
 	var _absyncProvider = this.__absyncProvider;
-	var self  = this;
+	var self            = this;
 
 	// If we have no configured socket.io connection yet, remember to register it later.
 	if( !_absyncProvider.__ioSocket ) {
