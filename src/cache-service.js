@@ -331,18 +331,23 @@ function getServiceConstructor( name, configuration ) {
 
 		forceReload = forceReload === true;
 
+		self.logInterface.debug( self.logPrefix + "Requesting entity '" + id + "' (forceReload:" + forceReload + ")…" );
+
 		if( !forceReload ) {
 			// Check if the entity is in the cache and return instantly if found.
 			for( var entityIndex = 0, entity = self.entityCache[ 0 ];
 			     entityIndex < self.entityCache.length;
 			     ++entityIndex, entity = self.entityCache[ entityIndex ] ) {
 				if( entity.id === id ) {
+					self.logInterface.debug( self.logPrefix + "Requested entity  '" + id + "' is served from cache." );
 					return self.q.when( entity );
 				}
 			}
 		}
 
 		var requestUri = configuration.entityUri + ( id ? ( "/" + id ) : "" );
+
+		self.logInterface.debug( self.logPrefix + "Requested entity  '" + id + "' is fetched from backend." );
 
 		// Grab the entity from the backend.
 		return self.httpInterface
@@ -484,7 +489,8 @@ function getServiceConstructor( name, configuration ) {
 	CacheService.prototype.__updateCacheWithEntity = function CacheService$updateCacheWithEntity( entityToCache ) {
 		var self = this;
 
-		self.logInterface.info( self.logPrefix + "Updating entity in cache…" );
+		self.logInterface.info( self.logPrefix + "Updating entity '" + entityToCache.id || self.name + "' in cache…",
+			entityToCache );
 
 		if( !Array.isArray( self.entityCache ) ) {
 			// Allow the user to intervene in the update process, before updating the entity.
