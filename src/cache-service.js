@@ -523,7 +523,7 @@ function getServiceConstructor( name, configuration ) {
 	CacheService.prototype.__updateCacheWithEntity = function CacheService$updateCacheWithEntity( entityToCache ) {
 		var self = this;
 
-		self.logInterface.info( self.logPrefix + "Updating entity '" + entityToCache.id || self.name + "' in cache…",
+		self.logInterface.info( self.logPrefix + "Updating entity '" + ( entityToCache.id || self.name ) + "' in cache…",
 			entityToCache );
 
 		if( !Array.isArray( self.entityCache ) ) {
