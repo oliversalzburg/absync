@@ -325,6 +325,11 @@ function getServiceConstructor( name, configuration ) {
 		// The raw cache is data that hasn't been deserialized and is used internally.
 		self.__entityCacheRaw = null;
 
+		// Should request caching be used at all?
+		self.enableRequestCache = true;
+		// Cache requests made to the backend to avoid multiple, simultaneous requests for the same resource.
+		self.__requestCache = {};
+
 		// TODO: Using deferreds is an anti-pattern and probably provides no value here.
 		self.__dataAvailableDeferred    = $q.defer();
 		self.__objectsAvailableDeferred = $q.defer();
@@ -594,22 +599,23 @@ function getServiceConstructor( name, configuration ) {
 
 		forceReload = forceReload === true;
 
+		self.logInterface.debug( self.logPrefix + "Requesting entity '" + id + "' (forceReload:" + forceReload + ")…" );
+
 		if( !forceReload ) {
 			// Check if the entity is in the cache and return instantly if found.
 			for( var entityIndex = 0, entity = self.entityCache[ 0 ];
 			     entityIndex < self.entityCache.length;
 			     ++entityIndex, entity = self.entityCache[ entityIndex ] ) {
 				if( entity.id === id ) {
+					self.logInterface.debug( self.logPrefix + "Requested entity  '" + id + "' is served from cache." );
 					return self.q.when( entity );
 				}
 			}
 		}
 
-		var requestUri = configuration.entityUri + ( id ? ( "/" + id ) : "" );
+		self.logInterface.debug( self.logPrefix + "Requested entity  '" + id + "' is fetched from backend." );
 
-		// Grab the entity from the backend.
-		return self.httpInterface
-			.get( requestUri )
+		return self.__requestEntity( id )
 			.then( onEntityRetrieved, onEntityRetrievalFailure );
 
 		/**
@@ -638,6 +644,39 @@ function getServiceConstructor( name, configuration ) {
 			self.logInterface.error( self.logPrefix + "Unable to retrieve entity with ID '" + id + "' from the server.",
 				serverResponse );
 			self.scope.$emit( "absyncError", serverResponse );
+		}
+	};
+
+	/**
+	 * Request an entity from the backend.
+	 * @param {String} id The ID of the entity.
+	 * @returns {Promise<configuration.model>|IPromise<TResult>|IPromise<void>}
+	 * @private
+	 */
+	CacheService.prototype.__requestEntity = function CacheService$requestEntity( id ) {
+		var self = this;
+
+		if( self.enableRequestCache && self.__requestCache && self.__requestCache[ id ] ) {
+			self.logInterface.debug( self.logPrefix + "Entity request    '" + id + "' served from request cache." );
+			return self.__requestCache[ id ];
+		}
+
+		var requestUri = configuration.entityUri + ( id ? ( "/" + id ) : "" );
+
+		// Grab the entity from the backend.
+		var request = self.httpInterface
+			.get( requestUri )
+			.then( remoteRequestFromCache.bind( self, id ) );
+
+		if( self.enableRequestCache && self.__requestCache ) {
+			self.__requestCache[ id ] = request;
+		}
+
+		return request;
+
+		function remoteRequestFromCache( id, serverResponse ) {
+			delete self.__requestCache[ id ];
+			return serverResponse;
 		}
 	};
 
@@ -747,7 +786,8 @@ function getServiceConstructor( name, configuration ) {
 	CacheService.prototype.__updateCacheWithEntity = function CacheService$updateCacheWithEntity( entityToCache ) {
 		var self = this;
 
-		self.logInterface.info( self.logPrefix + "Updating entity in cache…" );
+		self.logInterface.info( self.logPrefix + "Updating entity '" + entityToCache.id || self.name + "' in cache…",
+			entityToCache );
 
 		if( !Array.isArray( self.entityCache ) ) {
 			// Allow the user to intervene in the update process, before updating the entity.
