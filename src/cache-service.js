@@ -743,6 +743,7 @@ function getServiceConstructor( name, configuration ) {
 			function onComplexRetrieved( complex ) {
 				// When the complex was retrieved, store it back into the array.
 				entity[ propertyName ][ index ] = complex;
+				return entity;
 			}
 		}
 
