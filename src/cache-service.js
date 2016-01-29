@@ -169,13 +169,6 @@ function getServiceConstructor( name, configuration ) {
 			// Resolve our "objects are available" deferred.
 			// TODO: We could just as well initialize objectAvailable to the return value of this call block.
 			self.__objectsAvailableDeferred.resolve( self.entityCache );
-
-			// Notify the rest of the application about a fresh entity.
-			self.scope.$broadcast( "entityNew", {
-				service : self,
-				cache   : self.entityCache,
-				entity  : deserialized
-			} );
 		}
 
 		function deserializeCollectionEntry( rawEntity ) {
