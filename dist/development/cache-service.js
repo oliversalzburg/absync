@@ -61,32 +61,32 @@ function getServiceConstructor( name, configuration ) {
 		// We must never replace the cache with a new array or object, we must always manipulate the existing one.
 		// Otherwise watchers will not behave as the user expects them to.
 		/* @type {Array<configuration.model>|configuration.model} */
-		self.entityCache = configuration.collectionName ? [] : {};
+		self.entityCache      = configuration.collectionName ? [] : {};
 		// The raw cache is data that hasn't been deserialized and is used internally.
 		self.__entityCacheRaw = null;
 
 		// Should request caching be used at all?
 		self.enableRequestCache = true;
 		// Cache requests made to the backend to avoid multiple, simultaneous requests for the same resource.
-		self.__requestCache = {};
+		self.__requestCache     = {};
 
 		// TODO: Using deferreds is an anti-pattern and probably provides no value here.
 		self.__dataAvailableDeferred    = $q.defer();
 		self.__objectsAvailableDeferred = $q.defer();
 		// A promise that is resolved once initial data synchronization has taken place.
-		self.dataAvailable = self.__dataAvailableDeferred.promise;
+		self.dataAvailable              = self.__dataAvailableDeferred.promise;
 		// A promise that is resolved once the received data is extended to models.
-		self.objectsAvailable = self.__objectsAvailableDeferred.promise;
+		self.objectsAvailable           = self.__objectsAvailableDeferred.promise;
 
 		// Use $http by default and expose it on the service.
 		// This allows the user to set a different, possibly decorated, HTTP interface for this service.
 		self.httpInterface = $http;
 		// Do the same for our logger.
-		self.logInterface = $log;
+		self.logInterface  = $log;
 		// The scope on which we broadcast all our relevant events.
-		self.scope = $rootScope;
+		self.scope         = $rootScope;
 		// Keep a reference to $q.
-		self.q = $q;
+		self.q             = $q;
 
 		// Prefix log messages with this string.
 		self.logPrefix = "absync:" + name.toLocaleUpperCase() + " ";
@@ -172,13 +172,6 @@ function getServiceConstructor( name, configuration ) {
 			// Resolve our "objects are available" deferred.
 			// TODO: We could just as well initialize objectAvailable to the return value of this call block.
 			self.__objectsAvailableDeferred.resolve( self.entityCache );
-
-			// Notify the rest of the application about a fresh entity.
-			self.scope.$broadcast( "entityNew", {
-				service : self,
-				cache   : self.entityCache,
-				entity  : deserialized
-			} );
 		}
 
 		function deserializeCollectionEntry( rawEntity ) {
@@ -429,7 +422,7 @@ function getServiceConstructor( name, configuration ) {
 		var self = this;
 
 		// First create a copy of the object, which has complex properties reduced to their respective IDs.
-		var reduced = self.reduceComplex( entity );
+		var reduced    = self.reduceComplex( entity );
 		// Now serialize the object.
 		var serialized = self.serializer( reduced );
 
@@ -594,7 +587,14 @@ function getServiceConstructor( name, configuration ) {
 
 		// If the entity wasn't found in our records, it's a new entity.
 		if( !found ) {
+			self.scope.$broadcast( "beforeEntityNew", {
+				service : self,
+				cache   : self.entityCache,
+				entity  : entityToCache
+			} );
+
 			self.entityCache.push( entityToCache );
+
 			self.scope.$broadcast( "entityNew", {
 				service : self,
 				cache   : self.entityCache,
@@ -746,6 +746,7 @@ function getServiceConstructor( name, configuration ) {
 			function onComplexRetrieved( complex ) {
 				// When the complex was retrieved, store it back into the array.
 				entity[ propertyName ][ index ] = complex;
+				return entity;
 			}
 		}
 
