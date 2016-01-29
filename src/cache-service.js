@@ -584,7 +584,14 @@ function getServiceConstructor( name, configuration ) {
 
 		// If the entity wasn't found in our records, it's a new entity.
 		if( !found ) {
+			self.scope.$broadcast( "beforeEntityNew", {
+				service : self,
+				cache   : self.entityCache,
+				entity  : entityToCache
+			} );
+
 			self.entityCache.push( entityToCache );
+
 			self.scope.$broadcast( "entityNew", {
 				service : self,
 				cache   : self.entityCache,
