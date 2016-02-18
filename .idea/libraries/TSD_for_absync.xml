@@ -1,0 +1,13 @@
+<component name="libraryTable">
+  <library name="TSD for absync" type="javaScript">
+    <properties>
+      <sourceFilesUrls>
+        <item url="file://$PROJECT_DIR$/typings/tsd.d.ts" />
+      </sourceFilesUrls>
+    </properties>
+    <CLASSES>
+      <root url="file://$PROJECT_DIR$/typings/tsd.d.ts" />
+    </CLASSES>
+    <SOURCES />
+  </library>
+</component>
