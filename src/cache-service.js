@@ -101,12 +101,16 @@ function getServiceConstructor( name, configuration ) {
 		// When we receive these events, we broadcast an equal Angular event on the root scope.
 		// This way the user can already peek at the data (manipulating it is discouraged though).
 		absync.on( configuration.entityName, self.__onEntityOnWebsocket.bind( self ) );
-		absync.on( configuration.collectionName, self.__onCollectionOnWebsocket.bind( self ) );
+		if( configuration.collectionName ) {
+			absync.on( configuration.collectionName, self.__onCollectionOnWebsocket.bind( self ) );
+		}
 
 		// Now we listen on the root scope for the same events we're firing above.
 		// This is where our own absync synchronization logic kicks in.
 		$rootScope.$on( configuration.entityName, self.__onEntityReceived.bind( self ) );
-		$rootScope.$on( configuration.collectionName, self.__onCollectionReceived.bind( self ) );
+		if( configuration.collectionName ) {
+			$rootScope.$on( configuration.collectionName, self.__onCollectionReceived.bind( self ) );
+		}
 
 		// Wait for data to be available.
 		self.dataAvailable
