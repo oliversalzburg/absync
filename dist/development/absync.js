@@ -12,6 +12,7 @@
  *    Modifying these values from outside of absync is discouraged, but should be respected whenever possible.
  */
 
+getAbsyncProvider.$inject = ["$provide", "absyncCache"];
 angular
 	.module( "absync" )
 	.provider( "absync", getAbsyncProvider );
@@ -25,7 +26,6 @@ angular
 function getAbsyncProvider( $provide, absyncCache ) {
 	return new AbsyncProvider( $provide, absyncCache );
 }
-getAbsyncProvider.$inject = ["$provide", "absyncCache"];
 
 /**
  * Retrieves the absync provider.
