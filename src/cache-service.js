@@ -435,44 +435,36 @@ function getServiceConstructor( name, configuration ) {
 		if( "undefined" !== typeof entity.id ) {
 			return self.httpInterface
 				.put( configuration.entityUri + "/" + entity.id, wrappedEntity )
-				.then( afterEntityStored, onEntityStorageFailure );
+				.then( afterEntityStored.bind( self ), onEntityStorageFailure.bind( self ) );
 
 		} else {
 			// Create a new entity
 			return self.httpInterface
 				.post( configuration.collectionUri, wrappedEntity )
-				.then( afterEntityStored, onEntityStorageFailure );
+				.then( afterEntityStored.bind( self ), onEntityStorageFailure.bind( self ) );
 		}
+	};
 
-		/**
-		 * Invoked when the entity was stored on the server.
-		 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
-		 */
-		function afterEntityStored( serverResponse ) {
-			// Writing an entity to the backend will usually invoke an update event to be
-			// broadcast over websockets, where we would also retrieve the updated record.
-			// We still put the updated record we receive here into the cache to ensure early consistency.
-			// TODO: This might actually not be optimal. Consider only handling the websocket update.
-			if( serverResponse.data[ configuration.entityName ] ) {
-				var newEntity = self.deserializer( serverResponse.data[ configuration.entityName ] );
+	CacheService.prototype.patch = function CacheService$patch( entity ) {
+		var self = this;
 
-				// If early cache updates are forced, put the return entity into the cache.
-				if( self.forceEarlyCacheUpdate ) {
-					self.__updateCacheWithEntity( newEntity );
-				}
-				return newEntity;
-			}
-			throw new Error( "The response from the server was not in the expected format. It should have a member named '" + configuration.entityName + "'." );
-		}
+		// First create a copy of the object, which has complex properties reduced to their respective IDs.
+		var reduced    = self.reduceComplex( entity );
+		// Now serialize the object.
+		var serialized = self.serializer( reduced );
 
-		/**
-		 * Invoked when there was an error while trying to store the entity on the server.
-		 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
-		 */
-		function onEntityStorageFailure( serverResponse ) {
-			self.logInterface.error( self.logPrefix + "Unable to store entity on the server.",
-				serverResponse );
-			self.logInterface.error( serverResponse );
+		// Wrap the entity in a new object, with a single property, named after the entity type.
+		var wrappedEntity                         = {};
+		wrappedEntity[ configuration.entityName ] = serialized;
+
+		// Check if the entity has an "id" property, if it has, we will update. Otherwise, we create.
+		if( "undefined" !== typeof entity.id ) {
+			return self.httpInterface
+				.patch( configuration.entityUri + "/" + entity.id, wrappedEntity )
+				.then( afterEntityStored.bind( self ), onEntityStorageFailure.bind( self ) );
+
+		} else {
+			throw new Error( "Attempted to patch an entity that was never stored on the server." );
 		}
 	};
 
@@ -480,6 +472,41 @@ function getServiceConstructor( name, configuration ) {
 	 * Creates a new entity and persists it to the backend and the cache.
 	 */
 	CacheService.prototype.create = CacheService.prototype.update;
+
+	/**
+	 * Invoked when the entity was stored on the server.
+	 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
+	 */
+	function afterEntityStored( serverResponse ) {
+		var self = this;
+
+		// Writing an entity to the backend will usually invoke an update event to be
+		// broadcast over websockets, where we would also retrieve the updated record.
+		// We still put the updated record we receive here into the cache to ensure early consistency.
+		// TODO: This might actually not be optimal. Consider only handling the websocket update.
+		if( serverResponse.data[ configuration.entityName ] ) {
+			var newEntity = self.deserializer( serverResponse.data[ configuration.entityName ] );
+
+			// If early cache updates are forced, put the return entity into the cache.
+			if( self.forceEarlyCacheUpdate ) {
+				self.__updateCacheWithEntity( newEntity );
+			}
+			return newEntity;
+		}
+		throw new Error( "The response from the server was not in the expected format. It should have a member named '" + configuration.entityName + "'." );
+	}
+
+	/**
+	 * Invoked when there was an error while trying to store the entity on the server.
+	 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
+	 */
+	function onEntityStorageFailure( serverResponse ) {
+		var self = this;
+
+		self.logInterface.error( self.logPrefix + "Unable to store entity on the server.",
+			serverResponse );
+		self.logInterface.error( serverResponse );
+	}
 
 	/**
 	 * Remove an entity from the cache and have it deleted on the backend.
