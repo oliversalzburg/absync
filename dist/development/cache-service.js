@@ -38,6 +38,7 @@ function getServiceConstructor( name, configuration ) {
 	 * @returns {CacheService}
 	 * @ngInject
 	 */
+	CacheService.$inject = ["$http", "$injector", "$log", "$q", "$rootScope", "absync"];
 	function CacheService( $http, $injector, $log, $q, $rootScope, absync ) {
 		var self = this;
 
@@ -103,12 +104,16 @@ function getServiceConstructor( name, configuration ) {
 		// When we receive these events, we broadcast an equal Angular event on the root scope.
 		// This way the user can already peek at the data (manipulating it is discouraged though).
 		absync.on( configuration.entityName, self.__onEntityOnWebsocket.bind( self ) );
-		absync.on( configuration.collectionName, self.__onCollectionOnWebsocket.bind( self ) );
+		if( configuration.collectionName ) {
+			absync.on( configuration.collectionName, self.__onCollectionOnWebsocket.bind( self ) );
+		}
 
 		// Now we listen on the root scope for the same events we're firing above.
 		// This is where our own absync synchronization logic kicks in.
 		$rootScope.$on( configuration.entityName, self.__onEntityReceived.bind( self ) );
-		$rootScope.$on( configuration.collectionName, self.__onCollectionReceived.bind( self ) );
+		if( configuration.collectionName ) {
+			$rootScope.$on( configuration.collectionName, self.__onCollectionReceived.bind( self ) );
+		}
 
 		// Wait for data to be available.
 		self.dataAvailable
@@ -116,7 +121,6 @@ function getServiceConstructor( name, configuration ) {
 
 		self.logInterface.info( self.logPrefix + "service was instantiated." );
 	}
-	CacheService.$inject = ["$http", "$injector", "$log", "$q", "$rootScope", "absync"];
 
 	/**
 	 * Invoked when an entity is received on a websocket.
@@ -228,7 +232,7 @@ function getServiceConstructor( name, configuration ) {
 	/**
 	 * Ensure that the cached collection is retrieved from the server.
 	 * @param {Boolean} [forceReload=false] Should the data be loaded, even if the service already has a local cache?
-	 * @returns {Promise<Array<configuration.model>>|IPromise<Array>|IPromise<void>|Q.Promise<Array<configuration.model>>}
+	 * @returns {Promise<Array<configuration.model>>|IPromise<Array>|IPromise<void>|Q.Promise<Array<configuration.model>>|angular.IPromise<TResult>}
 	 */
 	CacheService.prototype.ensureLoaded = function CacheService$ensureLoaded( forceReload ) {
 		var self = this;
@@ -325,7 +329,7 @@ function getServiceConstructor( name, configuration ) {
 	 * The entity will be placed into the cache.
 	 * @param {String} id The ID of the entity to retrieve.
 	 * @param {Boolean} [forceReload=false] Should the entity be retrieved from the server, even if it is already in the cache?
-	 * @returns {Promise<configuration.model>|IPromise<TResult>|IPromise<void>}
+	 * @returns {Promise<configuration.model>|IPromise<TResult>|IPromise<void>|angular.IPromise<TResult>}
 	 */
 	CacheService.prototype.read = function CacheService$read( id, forceReload ) {
 		var self = this;
@@ -383,7 +387,7 @@ function getServiceConstructor( name, configuration ) {
 	/**
 	 * Request an entity from the backend.
 	 * @param {String} id The ID of the entity.
-	 * @returns {Promise<configuration.model>|IPromise<TResult>|IPromise<void>}
+	 * @returns {Promise<configuration.model>|IPromise<TResult>|IPromise<void>|angular.IPromise<TResult>}
 	 * @private
 	 */
 	CacheService.prototype.__requestEntity = function CacheService$requestEntity( id ) {
@@ -416,7 +420,7 @@ function getServiceConstructor( name, configuration ) {
 	/**
 	 * Updates an entity and persists it to the backend and the cache.
 	 * @param {configuration.model} entity
-	 * @return {Promise<configuration.model>|IPromise<TResult>} A promise that will be resolved with the updated entity.
+	 * @return {Promise<configuration.model>|IPromise<TResult>|angular.IPromise<TResult>} A promise that will be resolved with the updated entity.
 	 */
 	CacheService.prototype.update = function CacheService$update( entity ) {
 		var self = this;
@@ -434,44 +438,36 @@ function getServiceConstructor( name, configuration ) {
 		if( "undefined" !== typeof entity.id ) {
 			return self.httpInterface
 				.put( configuration.entityUri + "/" + entity.id, wrappedEntity )
-				.then( afterEntityStored, onEntityStorageFailure );
+				.then( afterEntityStored.bind( self ), onEntityStorageFailure.bind( self ) );
 
 		} else {
 			// Create a new entity
 			return self.httpInterface
 				.post( configuration.collectionUri, wrappedEntity )
-				.then( afterEntityStored, onEntityStorageFailure );
+				.then( afterEntityStored.bind( self ), onEntityStorageFailure.bind( self ) );
 		}
+	};
 
-		/**
-		 * Invoked when the entity was stored on the server.
-		 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
-		 */
-		function afterEntityStored( serverResponse ) {
-			// Writing an entity to the backend will usually invoke an update event to be
-			// broadcast over websockets, where we would also retrieve the updated record.
-			// We still put the updated record we receive here into the cache to ensure early consistency.
-			// TODO: This might actually not be optimal. Consider only handling the websocket update.
-			if( serverResponse.data[ configuration.entityName ] ) {
-				var newEntity = self.deserializer( serverResponse.data[ configuration.entityName ] );
+	CacheService.prototype.patch = function CacheService$patch( entity ) {
+		var self = this;
 
-				// If early cache updates are forced, put the return entity into the cache.
-				if( self.forceEarlyCacheUpdate ) {
-					self.__updateCacheWithEntity( newEntity );
-				}
-				return newEntity;
-			}
-			throw new Error( "The response from the server was not in the expected format. It should have a member named '" + configuration.entityName + "'." );
-		}
+		// First create a copy of the object, which has complex properties reduced to their respective IDs.
+		var reduced    = self.reduceComplex( entity );
+		// Now serialize the object.
+		var serialized = self.serializer( reduced );
 
-		/**
-		 * Invoked when there was an error while trying to store the entity on the server.
-		 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
-		 */
-		function onEntityStorageFailure( serverResponse ) {
-			self.logInterface.error( self.logPrefix + "Unable to store entity on the server.",
-				serverResponse );
-			self.logInterface.error( serverResponse );
+		// Wrap the entity in a new object, with a single property, named after the entity type.
+		var wrappedEntity                         = {};
+		wrappedEntity[ configuration.entityName ] = serialized;
+
+		// Check if the entity has an "id" property, if it has, we will update. Otherwise, we create.
+		if( "undefined" !== typeof entity.id ) {
+			return self.httpInterface
+				.patch( configuration.entityUri + "/" + entity.id, wrappedEntity )
+				.then( afterEntityStored.bind( self ), onEntityStorageFailure.bind( self ) );
+
+		} else {
+			throw new Error( "Attempted to patch an entity that was never stored on the server." );
 		}
 	};
 
@@ -479,6 +475,41 @@ function getServiceConstructor( name, configuration ) {
 	 * Creates a new entity and persists it to the backend and the cache.
 	 */
 	CacheService.prototype.create = CacheService.prototype.update;
+
+	/**
+	 * Invoked when the entity was stored on the server.
+	 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
+	 */
+	function afterEntityStored( serverResponse ) {
+		var self = this;
+
+		// Writing an entity to the backend will usually invoke an update event to be
+		// broadcast over websockets, where we would also retrieve the updated record.
+		// We still put the updated record we receive here into the cache to ensure early consistency.
+		// TODO: This might actually not be optimal. Consider only handling the websocket update.
+		if( serverResponse.data[ configuration.entityName ] ) {
+			var newEntity = self.deserializer( serverResponse.data[ configuration.entityName ] );
+
+			// If early cache updates are forced, put the return entity into the cache.
+			if( self.forceEarlyCacheUpdate ) {
+				self.__updateCacheWithEntity( newEntity );
+			}
+			return newEntity;
+		}
+		throw new Error( "The response from the server was not in the expected format. It should have a member named '" + configuration.entityName + "'." );
+	}
+
+	/**
+	 * Invoked when there was an error while trying to store the entity on the server.
+	 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
+	 */
+	function onEntityStorageFailure( serverResponse ) {
+		var self = this;
+
+		self.logInterface.error( self.logPrefix + "Unable to store entity on the server.",
+			serverResponse );
+		self.logInterface.error( serverResponse );
+	}
 
 	/**
 	 * Remove an entity from the cache and have it deleted on the backend.
@@ -696,7 +727,7 @@ function getServiceConstructor( name, configuration ) {
 	 * type instances which are being referenced in entity.
 	 * @param {Boolean} [force=false] If true, all complex types will be replaced with references to the
 	 * instances in cache; otherwise, only properties that are string representations of complex type IDs will be replaced.
-	 * @returns {IPromise<TResult>|IPromise<any[]>|IPromise<{}>}
+	 * @returns {IPromise<TResult>|IPromise<any[]>|IPromise<{}>|angular.IPromise<TResult>}
 	 */
 	CacheService.prototype.populateComplex = function CacheService$populateComplex( entity, propertyName, cache, force ) {
 		var self = this;
