@@ -229,7 +229,7 @@ function getServiceConstructor( name, configuration ) {
 	/**
 	 * Ensure that the cached collection is retrieved from the server.
 	 * @param {Boolean} [forceReload=false] Should the data be loaded, even if the service already has a local cache?
-	 * @returns {Promise<Array<configuration.model>>|IPromise<Array>|IPromise<void>|Q.Promise<Array<configuration.model>>}
+	 * @returns {Promise<Array<configuration.model>>|IPromise<Array>|IPromise<void>|Q.Promise<Array<configuration.model>>|angular.IPromise<TResult>}
 	 */
 	CacheService.prototype.ensureLoaded = function CacheService$ensureLoaded( forceReload ) {
 		var self = this;
@@ -326,7 +326,7 @@ function getServiceConstructor( name, configuration ) {
 	 * The entity will be placed into the cache.
 	 * @param {String} id The ID of the entity to retrieve.
 	 * @param {Boolean} [forceReload=false] Should the entity be retrieved from the server, even if it is already in the cache?
-	 * @returns {Promise<configuration.model>|IPromise<TResult>|IPromise<void>}
+	 * @returns {Promise<configuration.model>|IPromise<TResult>|IPromise<void>|angular.IPromise<TResult>}
 	 */
 	CacheService.prototype.read = function CacheService$read( id, forceReload ) {
 		var self = this;
@@ -384,7 +384,7 @@ function getServiceConstructor( name, configuration ) {
 	/**
 	 * Request an entity from the backend.
 	 * @param {String} id The ID of the entity.
-	 * @returns {Promise<configuration.model>|IPromise<TResult>|IPromise<void>}
+	 * @returns {Promise<configuration.model>|IPromise<TResult>|IPromise<void>|angular.IPromise<TResult>}
 	 * @private
 	 */
 	CacheService.prototype.__requestEntity = function CacheService$requestEntity( id ) {
@@ -417,7 +417,7 @@ function getServiceConstructor( name, configuration ) {
 	/**
 	 * Updates an entity and persists it to the backend and the cache.
 	 * @param {configuration.model} entity
-	 * @return {Promise<configuration.model>|IPromise<TResult>} A promise that will be resolved with the updated entity.
+	 * @return {Promise<configuration.model>|IPromise<TResult>|angular.IPromise<TResult>} A promise that will be resolved with the updated entity.
 	 */
 	CacheService.prototype.update = function CacheService$update( entity ) {
 		var self = this;
@@ -724,7 +724,7 @@ function getServiceConstructor( name, configuration ) {
 	 * type instances which are being referenced in entity.
 	 * @param {Boolean} [force=false] If true, all complex types will be replaced with references to the
 	 * instances in cache; otherwise, only properties that are string representations of complex type IDs will be replaced.
-	 * @returns {IPromise<TResult>|IPromise<any[]>|IPromise<{}>}
+	 * @returns {IPromise<TResult>|IPromise<any[]>|IPromise<{}>|angular.IPromise<TResult>}
 	 */
 	CacheService.prototype.populateComplex = function CacheService$populateComplex( entity, propertyName, cache, force ) {
 		var self = this;
