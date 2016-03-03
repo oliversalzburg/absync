@@ -356,6 +356,10 @@ function getServiceConstructor( name, configuration ) {
 		// Otherwise, absync will wait for them to be published through the websocket channel.
 		self.forceEarlyCacheUpdate = false;
 
+		// Throws failures so that they can be handled outside of absync.
+		// Note: This will become the default in future versions.
+		self.throwFailures = false;
+
 		// Expose the serializer/deserializer so that they can be adjusted at any time.
 		self.serializer   = serializeModel;
 		self.deserializer = deserializeModel;
@@ -557,6 +561,10 @@ function getServiceConstructor( name, configuration ) {
 				serverResponse );
 			self.__entityCacheRaw = null;
 			self.scope.$emit( "absyncError", serverResponse );
+
+			if( self.throwFailures ) {
+				throw serverResponse;
+			}
 		}
 
 		/**
@@ -581,6 +589,10 @@ function getServiceConstructor( name, configuration ) {
 				serverResponse );
 			self.__entityCacheRaw = null;
 			self.scope.$emit( "absyncError", serverResponse );
+
+			if( self.throwFailures ) {
+				throw serverResponse;
+			}
 		}
 	};
 
@@ -641,6 +653,10 @@ function getServiceConstructor( name, configuration ) {
 			self.logInterface.error( self.logPrefix + "Unable to retrieve entity with ID '" + id + "' from the server.",
 				serverResponse );
 			self.scope.$emit( "absyncError", serverResponse );
+
+			if( self.throwFailures ) {
+				throw serverResponse;
+			}
 		}
 	};
 
@@ -769,6 +785,11 @@ function getServiceConstructor( name, configuration ) {
 		self.logInterface.error( self.logPrefix + "Unable to store entity on the server.",
 			serverResponse );
 		self.logInterface.error( serverResponse );
+		self.scope.$emit( "absyncError", serverResponse );
+
+		if( self.throwFailures ) {
+			throw serverResponse;
+		}
 	}
 
 	/**
@@ -798,7 +819,11 @@ function getServiceConstructor( name, configuration ) {
 		 */
 		function onEntityDeletionFailed( serverResponse ) {
 			self.logInterface.error( serverResponse.data );
-			throw new Error( "Unable to delete entity." );
+			self.scope.$emit( "absyncError", serverResponse );
+
+			if( self.throwFailures ) {
+				throw serverResponse;
+			}
 		}
 	};
 
