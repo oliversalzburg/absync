@@ -34,7 +34,7 @@ function AbsyncProvider( $provide, absyncCache ) {
 	var self = this;
 
 	// Store a reference to the provide provider.
-	self.__provide = $provide;
+	self.__provide     = $provide;
 	// Store a reference to the cache service constructor.
 	self.__absyncCache = absyncCache;
 
@@ -62,12 +62,13 @@ function AbsyncProvider( $provide, absyncCache ) {
  * @param {io.Socket|Function|Object} configuration The socket.io instance to use.
  * Can also be a constructor for a socket.
  * Can also be an object with a "socket" member that provides either of the above.
+ * @param {Boolean} [debug=false] Enable additional debugging output.
  */
-AbsyncProvider.prototype.configure = function AbsyncProvider$configure( configuration ) {
+AbsyncProvider.prototype.configure = function AbsyncProvider$configure( configuration, debug ) {
 	var self = this;
 
 	// If the configuration has a "socket" member, unpack it.
-	var socket = configuration.socket || configuration;
+	var socket   = configuration.socket || configuration;
 	// Determine if the socket is an io.Socket.
 	var isSocket = io && io.Socket && socket instanceof io.Socket;
 
@@ -89,6 +90,8 @@ AbsyncProvider.prototype.configure = function AbsyncProvider$configure( configur
 		self.__registerLater.forEach( self.__registerListener.bind( self ) );
 		self.__registerLater = [];
 	}
+
+	self.debug = debug || false;
 };
 
 AbsyncProvider.prototype.__registerListener = function AbsyncProvider$registerListener( listener ) {
@@ -113,6 +116,9 @@ AbsyncProvider.prototype.collection = function AbsyncProvider$collection( name, 
 	if( self.__entities[ name ] ) {
 		throw new Error( "An entity with the name '" + name + "' was already requested. Names for collections must be unique and can't be shared with entities." );
 	}
+
+	// If no debug flag was set, use the value from the core absync provider.
+	configuration.debug = typeof configuration.debug === "undefined" ? self.debug : configuration.debug;
 
 	// Register the service configuration.
 	// __absyncCache will return a constructor for a service with the given configuration.
@@ -140,6 +146,9 @@ AbsyncProvider.prototype.entity = function AbsyncProvider$entity( name, configur
 	if( self.__collections[ name ] ) {
 		throw new Error( "A collection with the name '" + name + "' was already requested. Names for entities must be unique and can't be shared with collections." );
 	}
+
+	// If no debug flag was set, use the value from the core absync provider.
+	configuration.debug = typeof configuration.debug === "undefined" ? self.debug : configuration.debug;
 
 	// Register the service configuration.
 	// __absyncCache will return a constructor for a service with the given configuration.
@@ -175,10 +184,11 @@ function AbsyncService( parentProvider ) {
  * This configuration of absync should usually be performed through the absyncProvider in the configuration
  * phase of a module.
  * @param {io.Socket|Function|Object} configuration The socket.io instance to use.
+ * @param {Boolean} [debug=false] Enable additional debug output.
  */
-AbsyncService.prototype.configure = function AbsyncService$configure( configuration ) {
+AbsyncService.prototype.configure = function AbsyncService$configure( configuration, debug ) {
 	var _absyncProvider = this.__absyncProvider;
-	_absyncProvider.configure( configuration );
+	_absyncProvider.configure( configuration, debug || false );
 };
 
 /**

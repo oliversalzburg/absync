@@ -29,9 +29,10 @@ function AbsyncServiceConfigurationFactory() {
  * Serializers operate on a copy of the actual model, which already had complex members reduced to their IDs.
  * @param {Function} [injector] An injector to use for model instantiation. Uses $injector by default.
  * Usually, you don't need to provide an alternative here.
+ * @param {Boolean} [debug=false] Should additional debugging output be enabled?
  * @constructor
  */
-function AbsyncServiceConfiguration( model, collectionUri, entityUri, collectionName, entityName, deserialize, serialize, injector ) {
+function AbsyncServiceConfiguration( model, collectionUri, entityUri, collectionName, entityName, deserialize, serialize, injector, debug ) {
 	this.model         = model;
 	this.collectionUri = collectionUri;
 	this.entityUri     = entityUri;
@@ -44,4 +45,6 @@ function AbsyncServiceConfiguration( model, collectionUri, entityUri, collection
 	this.serialize   = serialize || undefined;
 
 	this.injector = injector || undefined;
+
+	this.debug = debug || false;
 }

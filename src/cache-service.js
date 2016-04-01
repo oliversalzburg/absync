@@ -33,10 +33,11 @@ function getServiceConstructor( name, configuration ) {
 	 * @param {angular.IQService|Object} $q
 	 * @param {angular.IRootScopeService|Object} $rootScope
 	 * @param {AbsyncService} absync
+	 * @param {Object} absyncNoopLog A log interface that does nothing.
 	 * @returns {CacheService}
 	 * @ngInject
 	 */
-	function CacheService( $http, $injector, $log, $q, $rootScope, absync ) {
+	function CacheService( $http, $injector, $log, $q, $rootScope, absync, absyncNoopLog ) {
 		var self = this;
 
 		// Retrieve a reference to the model of the collection that is being cached.
@@ -80,7 +81,7 @@ function getServiceConstructor( name, configuration ) {
 		// This allows the user to set a different, possibly decorated, HTTP interface for this service.
 		self.httpInterface = $http;
 		// Do the same for our logger.
-		self.logInterface  = $log;
+		self.logInterface  = configuration.debug ? $log : absyncNoopLog;
 		// The scope on which we broadcast all our relevant events.
 		self.scope         = $rootScope;
 		// Keep a reference to $q.
