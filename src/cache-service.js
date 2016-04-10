@@ -298,11 +298,9 @@ function getServiceConstructor( name, configuration ) {
 			self.logInterface.error( self.logPrefix + "Unable to retrieve the collection from the server.",
 				serverResponse );
 			self.__entityCacheRaw = null;
-			self.scope.$emit( "absyncError", serverResponse );
 
-			if( self.throwFailures ) {
-				throw serverResponse;
-			}
+			self.scope.$emit( "absyncError", serverResponse );
+			self.__dataAvailableDeferred.reject( serverResponse );
 		}
 
 		/**
@@ -326,11 +324,9 @@ function getServiceConstructor( name, configuration ) {
 			self.logInterface.error( self.logPrefix + "Unable to retrieve the entity from the server.",
 				serverResponse );
 			self.__entityCacheRaw = null;
-			self.scope.$emit( "absyncError", serverResponse );
 
-			if( self.throwFailures ) {
-				throw serverResponse;
-			}
+			self.scope.$emit( "absyncError", serverResponse );
+			self.__dataAvailableDeferred.reject( serverResponse );
 		}
 	};
 
