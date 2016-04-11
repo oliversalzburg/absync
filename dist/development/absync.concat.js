@@ -1192,7 +1192,7 @@ function uncachedFilterProvider() {
 		var delimiter     = -1 < url.indexOf( "?" ) ? "&" : "?";
 		var discriminator = new Date().getTime();
 
-		return url + delimiter + "t" + discriminator;
+		return url + delimiter + "t=" + discriminator;
 	}
 }
 }());
