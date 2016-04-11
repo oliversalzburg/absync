@@ -32,9 +32,10 @@ function AbsyncServiceConfigurationFactory() {
  * @param {Function} [injector] An injector to use for model instantiation. Uses $injector by default.
  * Usually, you don't need to provide an alternative here.
  * @param {Boolean} [debug=false] Should additional debugging output be enabled?
+ * @param {Object} [allowBrowserCache] A hash that controls the browsing caching behavior.
  * @constructor
  */
-function AbsyncServiceConfiguration( model, collectionUri, entityUri, collectionName, entityName, deserialize, serialize, injector, debug ) {
+function AbsyncServiceConfiguration( model, collectionUri, entityUri, collectionName, entityName, deserialize, serialize, injector, debug, allowBrowserCache ) {
 	this.model         = model;
 	this.collectionUri = collectionUri;
 	this.entityUri     = entityUri;
@@ -49,5 +50,10 @@ function AbsyncServiceConfiguration( model, collectionUri, entityUri, collection
 	this.injector = injector || undefined;
 
 	this.debug = debug || false;
+
+	this.allowBrowserCache = angular.merge( {}, {
+		sync    : true,
+		request : true
+	}, allowBrowserCache );
 }
 }());
