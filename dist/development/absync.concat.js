@@ -17,7 +17,6 @@ angular.module( "absync", [] );
  *    Modifying these values from outside of absync is discouraged, but should be respected whenever possible.
  */
 
-getAbsyncProvider.$inject = ["$provide", "absyncCache"];
 angular
 	.module( "absync" )
 	.provider( "absync", getAbsyncProvider );
@@ -31,6 +30,7 @@ angular
 function getAbsyncProvider( $provide, absyncCache ) {
 	return new AbsyncProvider( $provide, absyncCache );
 }
+getAbsyncProvider.$inject = ["$provide", "absyncCache"];
 
 /**
  * Retrieves the absync provider.
@@ -306,11 +306,11 @@ function getServiceConstructor( name, configuration ) {
 	 * @param {angular.IRootScopeService|Object} $rootScope
 	 * @param {AbsyncService} absync
 	 * @param {Object} absyncNoopLog A log interface that does nothing.
+	 * @param {Object} absyncUncachedFilter A filter that mutates URLs so they will bypass the browser cache.
 	 * @returns {CacheService}
 	 * @ngInject
 	 */
-	CacheService.$inject = ["$http", "$injector", "$log", "$q", "$rootScope", "absync", "absyncNoopLog"];
-	function CacheService( $http, $injector, $log, $q, $rootScope, absync, absyncNoopLog ) {
+	function CacheService( $http, $injector, $log, $q, $rootScope, absync, absyncNoopLog, absyncUncachedFilter ) {
 		var self = this;
 
 		// Retrieve a reference to the model of the collection that is being cached.
@@ -341,6 +341,17 @@ function getServiceConstructor( name, configuration ) {
 		self.enableRequestCache = true;
 		// Cache requests made to the backend to avoid multiple, simultaneous requests for the same resource.
 		self.__requestCache     = {};
+		// When we make HTTP requests, the browser is generally allowed to cache the responses.
+		// The server can control this behavior with cache control HTTPS headers.
+		// However, at times it may be desirable to force the browser to always fetch fresh data from the backend.
+		// This hash controls this behavior.
+		self.allowBrowserCache = angular.merge( {}, {
+			// Should browser caching be allowed for initial cache sync operations?
+			sync    : true,
+			// Should browser caching be allowed when we retrieve single entities from the backend?
+			request : true
+		}, configuration.allowBrowserCache );
+		self.__uncached        = absyncUncachedFilter;
 
 		// TODO: Using deferreds is an anti-pattern and probably provides no value here.
 		self.__dataAvailableDeferred    = $q.defer();
@@ -396,6 +407,7 @@ function getServiceConstructor( name, configuration ) {
 
 		self.logInterface.info( self.logPrefix + "service was instantiated." );
 	}
+	CacheService.$inject = ["$http", "$injector", "$log", "$q", "$rootScope", "absync", "absyncNoopLog", "absyncUncachedFilter"];
 
 	/**
 	 * Invoked when an entity is received on a websocket.
@@ -522,7 +534,8 @@ function getServiceConstructor( name, configuration ) {
 				if( configuration.entityName && configuration.entityUri ) {
 					self.__entityCacheRaw = {};
 					self.httpInterface
-						.get( configuration.entityUri )
+						.get( configuration.allowBrowserCache.sync ? configuration.entityUri : self.__uncached(
+							configuration.entityUri ) )
 						.then( onSingleEntityReceived, onSingleEntityRetrievalFailure );
 
 				} else {
@@ -534,7 +547,8 @@ function getServiceConstructor( name, configuration ) {
 			} else {
 				self.logInterface.info( self.logPrefix + "Retrieving '" + configuration.collectionName + "' collection…" );
 				self.httpInterface
-					.get( configuration.collectionUri )
+					.get( configuration.allowBrowserCache.sync ? configuration.collectionUri : self.__uncached(
+						configuration.collectionUri ) )
 					.then( onCollectionReceived, onCollectionRetrievalFailure );
 			}
 		}
@@ -571,11 +585,9 @@ function getServiceConstructor( name, configuration ) {
 			self.logInterface.error( self.logPrefix + "Unable to retrieve the collection from the server.",
 				serverResponse );
 			self.__entityCacheRaw = null;
-			self.scope.$emit( "absyncError", serverResponse );
 
-			if( self.throwFailures ) {
-				throw serverResponse;
-			}
+			self.scope.$emit( "absyncError", serverResponse );
+			self.__dataAvailableDeferred.reject( serverResponse );
 		}
 
 		/**
@@ -599,12 +611,15 @@ function getServiceConstructor( name, configuration ) {
 			self.logInterface.error( self.logPrefix + "Unable to retrieve the entity from the server.",
 				serverResponse );
 			self.__entityCacheRaw = null;
-			self.scope.$emit( "absyncError", serverResponse );
 
-			if( self.throwFailures ) {
-				throw serverResponse;
-			}
+			self.scope.$emit( "absyncError", serverResponse );
+			self.__dataAvailableDeferred.reject( serverResponse );
 		}
+	};
+
+	CacheService.prototype.sync = function CacheService$sync() {
+		var self = this;
+		return self.ensureLoaded( true );
 	};
 
 	/**
@@ -689,7 +704,7 @@ function getServiceConstructor( name, configuration ) {
 
 		// Grab the entity from the backend.
 		var request = self.httpInterface
-			.get( requestUri )
+			.get( configuration.allowBrowserCache.request ? requestUri : self.__uncached( requestUri ) )
 			.then( remoteRequestFromCache.bind( self, id ) );
 
 		if( self.enableRequestCache && self.__requestCache ) {
@@ -1123,9 +1138,10 @@ function AbsyncServiceConfigurationFactory() {
  * @param {Function} [injector] An injector to use for model instantiation. Uses $injector by default.
  * Usually, you don't need to provide an alternative here.
  * @param {Boolean} [debug=false] Should additional debugging output be enabled?
+ * @param {Object} [allowBrowserCache] A hash that controls the browsing caching behavior.
  * @constructor
  */
-function AbsyncServiceConfiguration( model, collectionUri, entityUri, collectionName, entityName, deserialize, serialize, injector, debug ) {
+function AbsyncServiceConfiguration( model, collectionUri, entityUri, collectionName, entityName, deserialize, serialize, injector, debug, allowBrowserCache ) {
 	this.model         = model;
 	this.collectionUri = collectionUri;
 	this.entityUri     = entityUri;
@@ -1140,6 +1156,11 @@ function AbsyncServiceConfiguration( model, collectionUri, entityUri, collection
 	this.injector = injector || undefined;
 
 	this.debug = debug || false;
+
+	this.allowBrowserCache = angular.merge( {}, {
+		sync    : true,
+		request : true
+	}, allowBrowserCache );
 }
 }());;(function() {
 "use strict";
@@ -1152,4 +1173,26 @@ angular
 		info  : angular.noop,
 		error : angular.noop
 	} );
+}());;(function() {
+"use strict";
+/* globals angular */
+
+angular
+	.module( "absync" )
+	.filter( "absyncUncached", uncachedFilterProvider );
+
+function uncachedFilterProvider() {
+	return uncachedFilter;
+
+	function uncachedFilter( url ) {
+		if( !url ) {
+			return url;
+		}
+
+		var delimiter     = -1 < url.indexOf( "?" ) ? "&" : "?";
+		var discriminator = new Date().getTime();
+
+		return url + delimiter + "t" + discriminator;
+	}
+}
 }());

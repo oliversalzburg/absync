@@ -1,3 +1,5 @@
+(function() {
+"use strict";
 /* globals angular */
 
 angular
@@ -18,3 +20,4 @@ function uncachedFilterProvider() {
 		return url + delimiter + "t" + discriminator;
 	}
 }
+}());
