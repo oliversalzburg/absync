@@ -534,7 +534,7 @@ function getServiceConstructor( name, configuration ) {
 				if( configuration.entityName && configuration.entityUri ) {
 					self.__entityCacheRaw = {};
 					self.httpInterface
-						.get( configuration.allowBrowserCache.sync ? configuration.entityUri : self.__uncached(
+						.get( self.allowBrowserCache.sync ? configuration.entityUri : self.__uncached(
 							configuration.entityUri ) )
 						.then( onSingleEntityReceived, onSingleEntityRetrievalFailure );
 
@@ -547,7 +547,7 @@ function getServiceConstructor( name, configuration ) {
 			} else {
 				self.logInterface.info( self.logPrefix + "Retrieving '" + configuration.collectionName + "' collection…" );
 				self.httpInterface
-					.get( configuration.allowBrowserCache.sync ? configuration.collectionUri : self.__uncached(
+					.get( self.allowBrowserCache.sync ? configuration.collectionUri : self.__uncached(
 						configuration.collectionUri ) )
 					.then( onCollectionReceived, onCollectionRetrievalFailure );
 			}
@@ -704,7 +704,7 @@ function getServiceConstructor( name, configuration ) {
 
 		// Grab the entity from the backend.
 		var request = self.httpInterface
-			.get( configuration.allowBrowserCache.request ? requestUri : self.__uncached( requestUri ) )
+			.get( self.allowBrowserCache.request ? requestUri : self.__uncached( requestUri ) )
 			.then( remoteRequestFromCache.bind( self, id ) );
 
 		if( self.enableRequestCache && self.__requestCache ) {
