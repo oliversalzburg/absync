@@ -30,10 +30,12 @@ describe( "absync", function() {
 
 		$httpBackend
 			.when( "GET", "/api/devices" )
-			.respond( [ {
-				id   : 1,
-				name : "My Device"
-			} ] );
+			.respond( {
+				devices : [ {
+					id   : 1,
+					name : "My Device"
+				} ]
+			} );
 	} ) );
 
 	beforeEach( inject( function( _devices_ ) {
@@ -42,5 +44,11 @@ describe( "absync", function() {
 
 	it( "should construct a caching service", function() {
 		expect( devices ).to.be.an( "object" );
+	} );
+
+	it( "should load a collection", function() {
+		devices.ensureLoaded();
+		$httpBackend.flush();
+		expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
 	} );
 } );
