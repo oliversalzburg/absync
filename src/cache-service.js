@@ -432,7 +432,7 @@ function getServiceConstructor( name, configuration ) {
 		// Grab the entity from the backend.
 		var request = self.httpInterface
 			.get( self.allowBrowserCache.request ? requestUri : self.__uncached( requestUri ) )
-			.then( remoteRequestFromCache.bind( self, id ) );
+			.then( removeRequestFromCache.bind( self, id ) );
 
 		if( self.enableRequestCache && self.__requestCache ) {
 			self.__requestCache[ id ] = request;
@@ -440,7 +440,7 @@ function getServiceConstructor( name, configuration ) {
 
 		return request;
 
-		function remoteRequestFromCache( id, serverResponse ) {
+		function removeRequestFromCache( id, serverResponse ) {
 			delete self.__requestCache[ id ];
 			return serverResponse;
 		}
