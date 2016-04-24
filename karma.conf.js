@@ -7,7 +7,6 @@ module.exports = function( config ) {
 		// Base path that will be used to resolve all patterns (eg. files, exclude)
 		basePath : "",
 
-
 		// Frameworks to use
 		// available frameworks: https://npmjs.org/browse/keyword/karma-adapter
 		frameworks : [ "mocha", "chai" ],
@@ -15,7 +14,6 @@ module.exports = function( config ) {
 
 		// List of files / patterns to load in the browser
 		files : [
-			"node_modules/phantomjs-polyfill/bind-polyfill.js",
 			"node_modules/angular/angular.js",
 			"node_modules/angular-mocks/angular-mocks.js",
 			"src/*.js",
