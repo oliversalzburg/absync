@@ -3,6 +3,7 @@
 
 describe( "absync", function() {
 	var $httpBackend;
+	var $rootScope;
 	var devices;
 
 	beforeEach( function() {
@@ -14,7 +15,8 @@ describe( "absync", function() {
 					collectionName : "devices",
 					collectionUri  : "/api/devices",
 					entityName     : "device",
-					entityUri      : "/api/device"
+					entityUri      : "/api/device",
+					debug          : true
 				};
 
 				_absyncProvider_.collection( "devices", serviceDefinition );
@@ -25,8 +27,9 @@ describe( "absync", function() {
 		module( "absync", "test" );
 	} );
 
-	beforeEach( inject( function( _$httpBackend_ ) {
+	beforeEach( inject( function( _$httpBackend_, _$rootScope_ ) {
 		$httpBackend = _$httpBackend_;
+		$rootScope   = _$rootScope_;
 
 		$httpBackend
 			.when( "GET", "/api/devices" )
@@ -50,5 +53,17 @@ describe( "absync", function() {
 		devices.ensureLoaded();
 		$httpBackend.flush();
 		expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
+	} );
+
+	it( "should provide an entity", function( done ) {
+		devices.ensureLoaded();
+		$httpBackend.flush();
+		devices.read( 1 )
+			.then( function( device ) {
+				expect( device ).to.be.an( "object" ).with.property( "name" ).that.equals( "My Device" );
+			} )
+			.then( done )
+			.catch( done );
+		$rootScope.$digest();
 	} );
 } );
