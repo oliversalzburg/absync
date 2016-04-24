@@ -73,7 +73,7 @@ function getServiceConstructor( name, configuration ) {
 		// The server can control this behavior with cache control HTTPS headers.
 		// However, at times it may be desirable to force the browser to always fetch fresh data from the backend.
 		// This hash controls this behavior.
-		self.allowBrowserCache = angular.merge( {}, {
+		self.allowBrowserCache = ( angular.merge || angular.extend )( {}, {
 			// Should browser caching be allowed for initial cache sync operations?
 			sync    : true,
 			// Should browser caching be allowed when we retrieve single entities from the backend?
