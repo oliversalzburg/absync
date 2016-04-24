@@ -19,10 +19,10 @@ describe( "absync", function() {
 					debug          : true
 				};
 
+				_absyncProvider_.configure( SockMock );
 				_absyncProvider_.collection( "devices", serviceDefinition );
 			} )
 			.constant( "Device", {} );
-
 
 		module( "absync", "test" );
 	} );
@@ -67,3 +67,41 @@ describe( "absync", function() {
 		$rootScope.$digest();
 	} );
 } );
+
+/**
+ * Simple mock for socket.io
+ * @see https://github.com/hackify/hackify-server/blob/90332597a81c0e46ae2cb8b6e4e3f7a428dfde4f/test/controllers.test.js#L310
+ */
+function SockMock() {
+	this.events = {};
+	this.emits  = {};
+
+	// Intercept 'on' calls and capture the callbacks
+	this.on = function( eventName, callback ) {
+		if( !this.events[ eventName ] ) {
+			this.events[ eventName ] = [];
+		}
+		this.events[ eventName ].push( callback );
+	};
+
+	// Intercept 'emit' calls from the client and record them to assert against in the test
+	this.emit = function( eventName ) {
+		var args = Array.prototype.slice.call( arguments, 1 );
+
+		if( !this.emits[ eventName ] ) {
+			this.emits[ eventName ] = [];
+		}
+		this.emits[ eventName ].push( args );
+	};
+
+	// Simulate an inbound message to the socket from the server (only called from the test)
+	this.receive = function( eventName ) {
+		var args = Array.prototype.slice.call( arguments, 1 );
+
+		if( this.events[ eventName ] ) {
+			angular.forEach( this.events[ eventName ], function( callback ) {
+				callback.apply( this, args );
+			} );
+		}
+	};
+}
