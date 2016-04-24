@@ -5,7 +5,8 @@
   "main": "dist/development/absync.concat.js",
   "scripts": {
     "test": "./node_modules/.bin/karma start --single-run --browsers PhantomJS",
-    "test-all": "./node_modules/.bin/karma start --single-run"
+    "test-all": "./node_modules/.bin/karma start --single-run",
+    "postinstall": "bower install"
   },
   "repository": {
     "type": "git",
@@ -17,7 +18,6 @@
     "url": "https://github.com/oliversalzburg/absync/issues"
   },
   "homepage": "https://github.com/oliversalzburg/absync",
-  "postinstall": "bower install",
   "devDependencies": {
     "chai": "~3.5.0",
     "del": "~2.2.0",
