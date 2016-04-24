@@ -17,9 +17,8 @@
     "url": "https://github.com/oliversalzburg/absync/issues"
   },
   "homepage": "https://github.com/oliversalzburg/absync",
+  "postinstall": "bower install",
   "devDependencies": {
-    "angular": "~1.5.5",
-    "angular-mocks": "~1.5.5",
     "chai": "~3.5.0",
     "del": "~2.2.0",
     "gulp": "~3.9.1",

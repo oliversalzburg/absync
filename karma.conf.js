@@ -14,8 +14,8 @@ module.exports = function( config ) {
 
 		// List of files / patterns to load in the browser
 		files : [
-			"node_modules/angular/angular.js",
-			"node_modules/angular-mocks/angular-mocks.js",
+			"bower_components/angular/angular.js",
+			"bower_components/angular-mocks/angular-mocks.js",
 			"src/*.js",
 			"test/*.spec.js"
 		],
@@ -38,7 +38,7 @@ module.exports = function( config ) {
 		// Test results reporter to use
 		// possible values: 'dots', 'progress'
 		// available reporters: https://npmjs.org/browse/keyword/karma-reporter
-		reporters : [ "coverage", "coveralls", "progress" ],
+		reporters : [ "progress", "coverage", "coveralls" ],
 
 		coverageReporter : {
 			type : "lcov", // lcov or lcovonly are required for generating lcov.info files
