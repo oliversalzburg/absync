@@ -70,11 +70,11 @@ AbsyncProvider.prototype.configure = function AbsyncProvider$configure( configur
 	// If the configuration has a "socket" member, unpack it.
 	var socket   = configuration.socket || configuration;
 	// Determine if the socket is an io.Socket.
-	var isSocket = io && io.Socket && socket instanceof io.Socket;
+	var isSocket = typeof io !== "undefined" && io.Socket && socket instanceof io.Socket;
 
 	if( typeof socket == "function" ) {
 		// Expect the passed socket to be a constructor.
-		self.__ioSocket = socket();
+		self.__ioSocket = new socket();// jscs:ignore requireCapitalizedConstructors
 
 	} else if( isSocket ) {
 		// Expect the passed socket to be an io.Socket instance.
