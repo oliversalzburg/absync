@@ -93,7 +93,7 @@ AbsyncProvider.prototype.configure = function AbsyncProvider$configure( configur
 		// Check if services already tried to register listeners, if so, register them now.
 		// This can happen when a service was constructed before absync was configured.
 		if( self.__registerLater.length ) {
-			self.__registerLater.forEach( self.__registerListener.bind( self ) );
+			angular.forEach( self.__registerLater, self.__registerListener.bind( self ) );
 			self.__registerLater = [];
 		}
 	}

@@ -171,7 +171,7 @@ function getServiceConstructor( name, configuration ) {
 			// We initialize it in the constructor to an empty array and we don't expect any writes to have
 			// happened to it. In case writes *did* happen, we assume that whoever wrote to it knows what
 			// they're doing.
-			rawData[ configuration.collectionName ].forEach( deserializeCollectionEntry );
+			angular.forEach( rawData[ configuration.collectionName ], deserializeCollectionEntry );
 
 			// Resolve our "objects are available" deferred.
 			// TODO: We could just as well initialize objectAvailable to the return value of this call block.
@@ -235,7 +235,7 @@ function getServiceConstructor( name, configuration ) {
 		self.entityCache.length = 0;
 
 		// Deserialize the received data and place the models in our cache.
-		_collectionReceived.forEach( addEntityToCache );
+		angular.forEach( _collectionReceived, addEntityToCache );
 
 		function addEntityToCache( entityReceived ) {
 			var deserialized = self.deserializer( entityReceived );
