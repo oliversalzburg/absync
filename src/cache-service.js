@@ -107,8 +107,7 @@ function getServiceConstructor( name, configuration ) {
 		self.forceEarlyCacheUpdate = false;
 
 		// Throws failures so that they can be handled outside of absync.
-		// Note: This will become the default in future versions.
-		self.throwFailures = false;
+		self.throwFailures = true;
 
 		// Expose the serializer/deserializer so that they can be adjusted at any time.
 		self.serializer   = serializeModel;
