@@ -449,10 +449,13 @@ function getServiceConstructor( name, configuration ) {
 	/**
 	 * Updates an entity and persists it to the backend and the cache.
 	 * @param {configuration.model} entity
+	 * @param {Boolean} [returnResult=false] Should the result of the query be returned?
 	 * @return {Promise<configuration.model>|IPromise<TResult>|angular.IPromise<TResult>} A promise that will be resolved with the updated entity.
 	 */
-	CacheService.prototype.update = function CacheService$update( entity ) {
+	CacheService.prototype.update = function CacheService$update( entity, returnResult ) {
 		var self = this;
+
+		returnResult = returnResult || false;
 
 		// First create a copy of the object, which has complex properties reduced to their respective IDs.
 		var reduced    = self.reduceComplex( entity );
@@ -467,13 +470,13 @@ function getServiceConstructor( name, configuration ) {
 		if( "undefined" !== typeof entity.id ) {
 			return self.httpInterface
 				.put( configuration.entityUri + "/" + entity.id, wrappedEntity )
-				.then( afterEntityStored.bind( self ), onEntityStorageFailure.bind( self ) );
+				.then( afterEntityStored.bind( self, returnResult ), onEntityStorageFailure.bind( self ) );
 
 		} else {
 			// Create a new entity
 			return self.httpInterface
 				.post( configuration.collectionUri, wrappedEntity )
-				.then( afterEntityStored.bind( self ), onEntityStorageFailure.bind( self ) );
+				.then( afterEntityStored.bind( self, returnResult ), onEntityStorageFailure.bind( self ) );
 		}
 	};
 
@@ -507,15 +510,19 @@ function getServiceConstructor( name, configuration ) {
 
 	/**
 	 * Invoked when the entity was stored on the server.
+	 * @param {Boolean} returnResult Should we return the parsed entity that is contained in the response?
 	 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
 	 */
-	function afterEntityStored( serverResponse ) {
+	function afterEntityStored( returnResult, serverResponse ) {
 		var self = this;
 
 		// Writing an entity to the backend will usually invoke an update event to be
 		// broadcast over websockets, where we would also retrieve the updated record.
-		// We still put the updated record we receive here into the cache to ensure early consistency.
-		// TODO: This might actually not be optimal. Consider only handling the websocket update.
+		// We still put the updated record we receive here into the cache to ensure early consistency, if that is requested.
+		if( !returnResult && !self.forceEarlyCacheUpdate ) {
+			return;
+		}
+
 		if( serverResponse.data[ configuration.entityName ] ) {
 			var newEntity = self.deserializer( serverResponse.data[ configuration.entityName ] );
 
@@ -523,9 +530,10 @@ function getServiceConstructor( name, configuration ) {
 			if( self.forceEarlyCacheUpdate ) {
 				self.__updateCacheWithEntity( newEntity );
 			}
-			return newEntity;
+			if( returnResult ) {
+				return newEntity;
+			}
 		}
-		throw new Error( "The response from the server was not in the expected format. It should have a member named '" + configuration.entityName + "'." );
 	}
 
 	/**
