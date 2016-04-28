@@ -73,7 +73,7 @@ function getServiceConstructor( name, configuration ) {
 		// The server can control this behavior with cache control HTTPS headers.
 		// However, at times it may be desirable to force the browser to always fetch fresh data from the backend.
 		// This hash controls this behavior.
-		self.allowBrowserCache = angular.merge( {}, {
+		self.allowBrowserCache = ( angular.merge || angular.extend )( {}, {
 			// Should browser caching be allowed for initial cache sync operations?
 			sync    : true,
 			// Should browser caching be allowed when we retrieve single entities from the backend?
@@ -107,8 +107,7 @@ function getServiceConstructor( name, configuration ) {
 		self.forceEarlyCacheUpdate = false;
 
 		// Throws failures so that they can be handled outside of absync.
-		// Note: This will become the default in future versions.
-		self.throwFailures = false;
+		self.throwFailures = true;
 
 		// Expose the serializer/deserializer so that they can be adjusted at any time.
 		self.serializer   = serializeModel;
@@ -171,7 +170,7 @@ function getServiceConstructor( name, configuration ) {
 			// We initialize it in the constructor to an empty array and we don't expect any writes to have
 			// happened to it. In case writes *did* happen, we assume that whoever wrote to it knows what
 			// they're doing.
-			rawData[ configuration.collectionName ].forEach( deserializeCollectionEntry );
+			angular.forEach( rawData[ configuration.collectionName ], deserializeCollectionEntry );
 
 			// Resolve our "objects are available" deferred.
 			// TODO: We could just as well initialize objectAvailable to the return value of this call block.
@@ -235,7 +234,7 @@ function getServiceConstructor( name, configuration ) {
 		self.entityCache.length = 0;
 
 		// Deserialize the received data and place the models in our cache.
-		_collectionReceived.forEach( addEntityToCache );
+		angular.forEach( _collectionReceived, addEntityToCache );
 
 		function addEntityToCache( entityReceived ) {
 			var deserialized = self.deserializer( entityReceived );
@@ -344,6 +343,42 @@ function getServiceConstructor( name, configuration ) {
 		}
 	};
 
+	/**
+	 * Pre-seed the cache with the given value.
+	 * Usually, you'd want to follow this up with a sync() to get fully in sync with the backend.
+	 * @param {Object|Array<Object>} cache
+	 * @returns {CacheService}
+	 */
+	CacheService.prototype.seed = function CacheService$seed( cache ) {
+		var self         = this;
+		self.entityCache = cache;
+
+		if( Array.isArray( self.entityCache ) ) {
+			// Notify the rest of the application about a fresh collection.
+			self.scope.$broadcast( "collectionNew", {
+				service : self,
+				cache   : self.entityCache
+			} );
+
+		} else {
+			self.scope.$broadcast( "beforeEntityNew", {
+				service : self,
+				cache   : self.entityCache,
+				entity  : self.entityCache
+			} );
+
+			self.scope.$broadcast( "entityNew", {
+				service : self,
+				cache   : self.entityCache,
+				entity  : self.entityCache
+			} );
+
+			self.__objectsAvailableDeferred.resolve( self.entityCache );
+		}
+
+		return self;
+	};
+
 	CacheService.prototype.sync = function CacheService$sync() {
 		var self = this;
 		return self.ensureLoaded( true );
@@ -432,7 +467,7 @@ function getServiceConstructor( name, configuration ) {
 		// Grab the entity from the backend.
 		var request = self.httpInterface
 			.get( self.allowBrowserCache.request ? requestUri : self.__uncached( requestUri ) )
-			.then( remoteRequestFromCache.bind( self, id ) );
+			.then( removeRequestFromCache.bind( self, id ) );
 
 		if( self.enableRequestCache && self.__requestCache ) {
 			self.__requestCache[ id ] = request;
@@ -440,7 +475,7 @@ function getServiceConstructor( name, configuration ) {
 
 		return request;
 
-		function remoteRequestFromCache( id, serverResponse ) {
+		function removeRequestFromCache( id, serverResponse ) {
 			delete self.__requestCache[ id ];
 			return serverResponse;
 		}
@@ -449,10 +484,13 @@ function getServiceConstructor( name, configuration ) {
 	/**
 	 * Updates an entity and persists it to the backend and the cache.
 	 * @param {configuration.model} entity
+	 * @param {Boolean} [returnResult=false] Should the result of the query be returned?
 	 * @return {Promise<configuration.model>|IPromise<TResult>|angular.IPromise<TResult>} A promise that will be resolved with the updated entity.
 	 */
-	CacheService.prototype.update = function CacheService$update( entity ) {
+	CacheService.prototype.update = function CacheService$update( entity, returnResult ) {
 		var self = this;
+
+		returnResult = returnResult || false;
 
 		// First create a copy of the object, which has complex properties reduced to their respective IDs.
 		var reduced    = self.reduceComplex( entity );
@@ -467,13 +505,13 @@ function getServiceConstructor( name, configuration ) {
 		if( "undefined" !== typeof entity.id ) {
 			return self.httpInterface
 				.put( configuration.entityUri + "/" + entity.id, wrappedEntity )
-				.then( afterEntityStored.bind( self ), onEntityStorageFailure.bind( self ) );
+				.then( afterEntityStored.bind( self, returnResult ), onEntityStorageFailure.bind( self ) );
 
 		} else {
 			// Create a new entity
 			return self.httpInterface
 				.post( configuration.collectionUri, wrappedEntity )
-				.then( afterEntityStored.bind( self ), onEntityStorageFailure.bind( self ) );
+				.then( afterEntityStored.bind( self, returnResult ), onEntityStorageFailure.bind( self ) );
 		}
 	};
 
@@ -507,15 +545,19 @@ function getServiceConstructor( name, configuration ) {
 
 	/**
 	 * Invoked when the entity was stored on the server.
+	 * @param {Boolean} returnResult Should we return the parsed entity that is contained in the response?
 	 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
 	 */
-	function afterEntityStored( serverResponse ) {
+	function afterEntityStored( returnResult, serverResponse ) {
 		var self = this;
 
 		// Writing an entity to the backend will usually invoke an update event to be
 		// broadcast over websockets, where we would also retrieve the updated record.
-		// We still put the updated record we receive here into the cache to ensure early consistency.
-		// TODO: This might actually not be optimal. Consider only handling the websocket update.
+		// We still put the updated record we receive here into the cache to ensure early consistency, if that is requested.
+		if( !returnResult && !self.forceEarlyCacheUpdate ) {
+			return;
+		}
+
 		if( serverResponse.data[ configuration.entityName ] ) {
 			var newEntity = self.deserializer( serverResponse.data[ configuration.entityName ] );
 
@@ -523,9 +565,10 @@ function getServiceConstructor( name, configuration ) {
 			if( self.forceEarlyCacheUpdate ) {
 				self.__updateCacheWithEntity( newEntity );
 			}
-			return newEntity;
+			if( returnResult ) {
+				return newEntity;
+			}
 		}
-		throw new Error( "The response from the server was not in the expected format. It should have a member named '" + configuration.entityName + "'." );
 	}
 
 	/**

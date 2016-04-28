@@ -17,30 +17,34 @@ angular.module( "absync", [] );
  *    Modifying these values from outside of absync is discouraged, but should be respected whenever possible.
  */
 
+getAbsyncProvider.$inject = ["$injector", "$provide", "absyncCache"];
 angular
 	.module( "absync" )
 	.provider( "absync", getAbsyncProvider );
 
 /**
  * Retrieves the absync provider.
+ * @param {angular.auto.IInjectorService|Object} $injector The $injector provider.
  * @param {angular.auto.IProvideService|Object} $provide The $provide provider
  * @param {Function} absyncCache The AbsyncCache service constructor.
  * @ngInject
  */
-function getAbsyncProvider( $provide, absyncCache ) {
-	return new AbsyncProvider( $provide, absyncCache );
+function getAbsyncProvider( $injector, $provide, absyncCache ) {
+	return new AbsyncProvider( $injector, $provide, absyncCache );
 }
-getAbsyncProvider.$inject = ["$provide", "absyncCache"];
 
 /**
  * Retrieves the absync provider.
- * @param {angular.auto.IProvideService|Object} $provide The $provide provider
+ * @param {angular.auto.IInjectorService|Object} $injector The $injector provider.
+ * @param {angular.auto.IProvideService|Object} $provide The $provide provider.
  * @param {Function} absyncCache The AbsyncCache service constructor.
  * @constructor
  */
-function AbsyncProvider( $provide, absyncCache ) {
+function AbsyncProvider( $injector, $provide, absyncCache ) {
 	var self = this;
 
+	// Store a reference to the inject provider.
+	self.__injector    = $injector;
 	// Store a reference to the provide provider.
 	self.__provide     = $provide;
 	// Store a reference to the cache service constructor.
@@ -62,44 +66,58 @@ function AbsyncProvider( $provide, absyncCache ) {
 	// The keys are the names of the entities, the value contains the constructor of
 	// the respective cache service.
 	self.__entities = {};
+
+	// Debug should either be set through a configure() call, or on instantiated services.
+	self.debug = undefined;
 }
 
 /**
  * Register the configurator on the provider itself to allow early configuration during setup phase.
  * It is recommended to configure absync within a configuration phase of a module.
- * @param {io.Socket|Function|Object} configuration The socket.io instance to use.
- * Can also be a constructor for a socket.
- * Can also be an object with a "socket" member that provides either of the above.
- * @param {Boolean} [debug=false] Enable additional debugging output.
+ * @param {Object} configuration The configuration for the absync provider.
+ * Can have a member `socket`, pointing to the socket.io instance or constructor to use.
+ * Can have a member `debug`, enabling debugging, if set to true.
  */
-AbsyncProvider.prototype.configure = function AbsyncProvider$configure( configuration, debug ) {
+AbsyncProvider.prototype.configure = function AbsyncProvider$configure( configuration ) {
 	var self = this;
 
-	// If the configuration has a "socket" member, unpack it.
-	var socket   = configuration.socket || configuration;
-	// Determine if the socket is an io.Socket.
-	var isSocket = io && io.Socket && socket instanceof io.Socket;
+	if( typeof configuration.socket !== "undefined" ) {
+		var socket   = configuration.socket;
+		// Determine if the socket is an io.Socket.
+		var isSocket = typeof io !== "undefined" && io.Socket && socket instanceof io.Socket;
 
-	if( typeof socket == "function" ) {
-		// Expect the passed socket to be a constructor.
-		self.__ioSocket = socket();
+		if( typeof socket == "function" ) {
+			// Expect the passed socket to be a constructor.
+			self.__ioSocket = new socket();// jscs:ignore requireCapitalizedConstructors
 
-	} else if( isSocket ) {
-		// Expect the passed socket to be an io.Socket instance.
-		self.__ioSocket = socket;
+		} else if( isSocket ) {
+			// Expect the passed socket to be an io.Socket instance.
+			self.__ioSocket = socket;
 
-	} else {
-		throw new Error( "configure() expects input to be a function or a socket.io Socket instance." );
+		} else {
+			throw new Error( "configure() expects input to be a function or a socket.io Socket instance." );
+		}
+
+		// Check if services already tried to register listeners, if so, register them now.
+		// This can happen when a service was constructed before absync was configured.
+		if( self.__registerLater.length ) {
+			angular.forEach( self.__registerLater, self.__registerListener.bind( self ) );
+			self.__registerLater = [];
+		}
 	}
 
-	// Check if services already tried to register listeners, if so, register them now.
-	// This can happen when a service was constructed before absync was configured.
-	if( self.__registerLater.length ) {
-		self.__registerLater.forEach( self.__registerListener.bind( self ) );
-		self.__registerLater = [];
+	if( typeof configuration.debug !== "undefined" ) {
+		self.debug = configuration.debug || false;
 	}
 
-	self.debug = debug || false;
+	if( self.debug ) {
+		angular.forEach( self.__collections, function enableDebugging( collection ) {
+			collection.configuration.debug = true;
+		} );
+		angular.forEach( self.__entities, function enableDebugging( entity ) {
+			entity.configuration.debug = true;
+		} );
+	}
 };
 
 AbsyncProvider.prototype.__registerListener = function AbsyncProvider$registerListener( listener ) {
@@ -130,11 +148,14 @@ AbsyncProvider.prototype.collection = function AbsyncProvider$collection( name, 
 
 	// Register the service configuration.
 	// __absyncCache will return a constructor for a service with the given configuration.
-	self.__collections[ name ] = self.__absyncCache( name, configuration );
+	self.__collections[ name ] = {
+		constructor   : self.__absyncCache( name, configuration ),
+		configuration : configuration
+	};
 
 	// Register the new service.
 	// Yes, we want an Angular "service" here, because we want it constructed with "new".
-	self.__provide.service( name, self.__collections[ name ] );
+	self.__provide.service( name, self.__collections[ name ].constructor );
 };
 
 /**
@@ -160,11 +181,14 @@ AbsyncProvider.prototype.entity = function AbsyncProvider$entity( name, configur
 
 	// Register the service configuration.
 	// __absyncCache will return a constructor for a service with the given configuration.
-	self.__entities[ name ] = self.__absyncCache( name, configuration );
+	self.__entities[ name ] = {
+		constructor   : self.__absyncCache( name, configuration ),
+		configuration : configuration
+	};
 
 	// Register the new service.
 	// Yes, we want an Angular "service" here, because we want it constructed with "new".
-	self.__provide.service( name, self.__entities[ name ] );
+	self.__provide.service( name, self.__entities[ name ].constructor );
 };
 
 /**
@@ -191,12 +215,13 @@ function AbsyncService( parentProvider ) {
  * Configure the socket.io connection for absync.
  * This configuration of absync should usually be performed through the absyncProvider in the configuration
  * phase of a module.
- * @param {io.Socket|Function|Object} configuration The socket.io instance to use.
- * @param {Boolean} [debug=false] Enable additional debug output.
+ * @param {Object} configuration The configuration for the absync provider.
+ * Can have a member `socket`, pointing to the socket.io instance or constructor to use.
+ * Can have a member `debug`, enabling debugging, if set to true.
  */
-AbsyncService.prototype.configure = function AbsyncService$configure( configuration, debug ) {
+AbsyncService.prototype.configure = function AbsyncService$configure( configuration ) {
 	var _absyncProvider = this.__absyncProvider;
-	_absyncProvider.configure( configuration, debug || false );
+	_absyncProvider.configure( configuration );
 };
 
 /**
@@ -310,6 +335,7 @@ function getServiceConstructor( name, configuration ) {
 	 * @returns {CacheService}
 	 * @ngInject
 	 */
+	CacheService.$inject = ["$http", "$injector", "$log", "$q", "$rootScope", "absync", "absyncNoopLog", "absyncUncachedFilter"];
 	function CacheService( $http, $injector, $log, $q, $rootScope, absync, absyncNoopLog, absyncUncachedFilter ) {
 		var self = this;
 
@@ -345,7 +371,7 @@ function getServiceConstructor( name, configuration ) {
 		// The server can control this behavior with cache control HTTPS headers.
 		// However, at times it may be desirable to force the browser to always fetch fresh data from the backend.
 		// This hash controls this behavior.
-		self.allowBrowserCache = angular.merge( {}, {
+		self.allowBrowserCache = ( angular.merge || angular.extend )( {}, {
 			// Should browser caching be allowed for initial cache sync operations?
 			sync    : true,
 			// Should browser caching be allowed when we retrieve single entities from the backend?
@@ -379,8 +405,7 @@ function getServiceConstructor( name, configuration ) {
 		self.forceEarlyCacheUpdate = false;
 
 		// Throws failures so that they can be handled outside of absync.
-		// Note: This will become the default in future versions.
-		self.throwFailures = false;
+		self.throwFailures = true;
 
 		// Expose the serializer/deserializer so that they can be adjusted at any time.
 		self.serializer   = serializeModel;
@@ -407,7 +432,6 @@ function getServiceConstructor( name, configuration ) {
 
 		self.logInterface.info( self.logPrefix + "service was instantiated." );
 	}
-	CacheService.$inject = ["$http", "$injector", "$log", "$q", "$rootScope", "absync", "absyncNoopLog", "absyncUncachedFilter"];
 
 	/**
 	 * Invoked when an entity is received on a websocket.
@@ -444,7 +468,7 @@ function getServiceConstructor( name, configuration ) {
 			// We initialize it in the constructor to an empty array and we don't expect any writes to have
 			// happened to it. In case writes *did* happen, we assume that whoever wrote to it knows what
 			// they're doing.
-			rawData[ configuration.collectionName ].forEach( deserializeCollectionEntry );
+			angular.forEach( rawData[ configuration.collectionName ], deserializeCollectionEntry );
 
 			// Resolve our "objects are available" deferred.
 			// TODO: We could just as well initialize objectAvailable to the return value of this call block.
@@ -508,7 +532,7 @@ function getServiceConstructor( name, configuration ) {
 		self.entityCache.length = 0;
 
 		// Deserialize the received data and place the models in our cache.
-		_collectionReceived.forEach( addEntityToCache );
+		angular.forEach( _collectionReceived, addEntityToCache );
 
 		function addEntityToCache( entityReceived ) {
 			var deserialized = self.deserializer( entityReceived );
@@ -617,6 +641,42 @@ function getServiceConstructor( name, configuration ) {
 		}
 	};
 
+	/**
+	 * Pre-seed the cache with the given value.
+	 * Usually, you'd want to follow this up with a sync() to get fully in sync with the backend.
+	 * @param {Object|Array<Object>} cache
+	 * @returns {CacheService}
+	 */
+	CacheService.prototype.seed = function CacheService$seed( cache ) {
+		var self         = this;
+		self.entityCache = cache;
+
+		if( Array.isArray( self.entityCache ) ) {
+			// Notify the rest of the application about a fresh collection.
+			self.scope.$broadcast( "collectionNew", {
+				service : self,
+				cache   : self.entityCache
+			} );
+
+		} else {
+			self.scope.$broadcast( "beforeEntityNew", {
+				service : self,
+				cache   : self.entityCache,
+				entity  : self.entityCache
+			} );
+
+			self.scope.$broadcast( "entityNew", {
+				service : self,
+				cache   : self.entityCache,
+				entity  : self.entityCache
+			} );
+
+			self.__objectsAvailableDeferred.resolve( self.entityCache );
+		}
+
+		return self;
+	};
+
 	CacheService.prototype.sync = function CacheService$sync() {
 		var self = this;
 		return self.ensureLoaded( true );
@@ -705,7 +765,7 @@ function getServiceConstructor( name, configuration ) {
 		// Grab the entity from the backend.
 		var request = self.httpInterface
 			.get( self.allowBrowserCache.request ? requestUri : self.__uncached( requestUri ) )
-			.then( remoteRequestFromCache.bind( self, id ) );
+			.then( removeRequestFromCache.bind( self, id ) );
 
 		if( self.enableRequestCache && self.__requestCache ) {
 			self.__requestCache[ id ] = request;
@@ -713,7 +773,7 @@ function getServiceConstructor( name, configuration ) {
 
 		return request;
 
-		function remoteRequestFromCache( id, serverResponse ) {
+		function removeRequestFromCache( id, serverResponse ) {
 			delete self.__requestCache[ id ];
 			return serverResponse;
 		}
@@ -722,10 +782,13 @@ function getServiceConstructor( name, configuration ) {
 	/**
 	 * Updates an entity and persists it to the backend and the cache.
 	 * @param {configuration.model} entity
+	 * @param {Boolean} [returnResult=false] Should the result of the query be returned?
 	 * @return {Promise<configuration.model>|IPromise<TResult>|angular.IPromise<TResult>} A promise that will be resolved with the updated entity.
 	 */
-	CacheService.prototype.update = function CacheService$update( entity ) {
+	CacheService.prototype.update = function CacheService$update( entity, returnResult ) {
 		var self = this;
+
+		returnResult = returnResult || false;
 
 		// First create a copy of the object, which has complex properties reduced to their respective IDs.
 		var reduced    = self.reduceComplex( entity );
@@ -740,13 +803,13 @@ function getServiceConstructor( name, configuration ) {
 		if( "undefined" !== typeof entity.id ) {
 			return self.httpInterface
 				.put( configuration.entityUri + "/" + entity.id, wrappedEntity )
-				.then( afterEntityStored.bind( self ), onEntityStorageFailure.bind( self ) );
+				.then( afterEntityStored.bind( self, returnResult ), onEntityStorageFailure.bind( self ) );
 
 		} else {
 			// Create a new entity
 			return self.httpInterface
 				.post( configuration.collectionUri, wrappedEntity )
-				.then( afterEntityStored.bind( self ), onEntityStorageFailure.bind( self ) );
+				.then( afterEntityStored.bind( self, returnResult ), onEntityStorageFailure.bind( self ) );
 		}
 	};
 
@@ -780,15 +843,19 @@ function getServiceConstructor( name, configuration ) {
 
 	/**
 	 * Invoked when the entity was stored on the server.
+	 * @param {Boolean} returnResult Should we return the parsed entity that is contained in the response?
 	 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
 	 */
-	function afterEntityStored( serverResponse ) {
+	function afterEntityStored( returnResult, serverResponse ) {
 		var self = this;
 
 		// Writing an entity to the backend will usually invoke an update event to be
 		// broadcast over websockets, where we would also retrieve the updated record.
-		// We still put the updated record we receive here into the cache to ensure early consistency.
-		// TODO: This might actually not be optimal. Consider only handling the websocket update.
+		// We still put the updated record we receive here into the cache to ensure early consistency, if that is requested.
+		if( !returnResult && !self.forceEarlyCacheUpdate ) {
+			return;
+		}
+
 		if( serverResponse.data[ configuration.entityName ] ) {
 			var newEntity = self.deserializer( serverResponse.data[ configuration.entityName ] );
 
@@ -796,9 +863,10 @@ function getServiceConstructor( name, configuration ) {
 			if( self.forceEarlyCacheUpdate ) {
 				self.__updateCacheWithEntity( newEntity );
 			}
-			return newEntity;
+			if( returnResult ) {
+				return newEntity;
+			}
 		}
-		throw new Error( "The response from the server was not in the expected format. It should have a member named '" + configuration.entityName + "'." );
 	}
 
 	/**
