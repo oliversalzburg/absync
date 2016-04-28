@@ -343,6 +343,42 @@ function getServiceConstructor( name, configuration ) {
 		}
 	};
 
+	/**
+	 * Pre-seed the cache with the given value.
+	 * Usually, you'd want to follow this up with a sync() to get fully in sync with the backend.
+	 * @param {Object|Array<Object>} cache
+	 * @returns {CacheService}
+	 */
+	CacheService.prototype.seed = function CacheService$seed( cache ) {
+		var self         = this;
+		self.entityCache = cache;
+
+		if( Array.isArray( self.entityCache ) ) {
+			// Notify the rest of the application about a fresh collection.
+			self.scope.$broadcast( "collectionNew", {
+				service : self,
+				cache   : self.entityCache
+			} );
+
+		} else {
+			self.scope.$broadcast( "beforeEntityNew", {
+				service : self,
+				cache   : self.entityCache,
+				entity  : self.entityCache
+			} );
+
+			self.scope.$broadcast( "entityNew", {
+				service : self,
+				cache   : self.entityCache,
+				entity  : self.entityCache
+			} );
+
+			self.__objectsAvailableDeferred.resolve( self.entityCache );
+		}
+
+		return self;
+	};
+
 	CacheService.prototype.sync = function CacheService$sync() {
 		var self = this;
 		return self.ensureLoaded( true );
