@@ -209,16 +209,20 @@ function getServiceConstructor( name, configuration ) {
 		var self            = this;
 		var _entityReceived = args;
 
-		// Determine if the received record consists ONLY of an id property,
-		// which would mean that this record was deleted from the backend.
-		if( 1 === Object.keys( _entityReceived ).length && _entityReceived.hasOwnProperty( "id" ) ) {
-			self.logInterface.info( self.logPrefix + "Entity was deleted from the server. Updating cache…" );
-			self.__removeEntityFromCache( _entityReceived.id );
+		// Defer processing until data has been received initially.
+		return self.dataAvailable
+			.then( function handleReceivedEntity() {
+				// Determine if the received record consists ONLY of an id property,
+				// which would mean that this record was deleted from the backend.
+				if( 1 === Object.keys( _entityReceived ).length && _entityReceived.hasOwnProperty( "id" ) ) {
+					self.logInterface.info( self.logPrefix + "Entity was deleted from the server. Updating cache…" );
+					return self.__removeEntityFromCache( _entityReceived.id );
 
-		} else {
-			self.logInterface.debug( self.logPrefix + "Entity was updated on the server. Updating cache…" );
-			self.__updateCacheWithEntity( self.deserializer( _entityReceived ) );
-		}
+				} else {
+					self.logInterface.debug( self.logPrefix + "Entity was updated on the server. Updating cache…" );
+					return self.__updateCacheWithEntity( self.deserializer( _entityReceived ) );
+				}
+			} );
 	};
 
 	/**
