@@ -81,14 +81,6 @@ function getServiceConstructor( name, configuration ) {
 		}, configuration.allowBrowserCache );
 		self.__uncached        = absyncUncachedFilter;
 
-		// TODO: Using deferreds is an anti-pattern and probably provides no value here.
-		self.__dataAvailableDeferred    = $q.defer();
-		self.__objectsAvailableDeferred = $q.defer();
-		// A promise that is resolved once initial data synchronization has taken place.
-		self.dataAvailable              = self.__dataAvailableDeferred.promise;
-		// A promise that is resolved once the received data is extended to models.
-		self.objectsAvailable           = self.__objectsAvailableDeferred.promise;
-
 		// Use $http by default and expose it on the service.
 		// This allows the user to set a different, possibly decorated, HTTP interface for this service.
 		self.httpInterface = $http;
@@ -98,6 +90,14 @@ function getServiceConstructor( name, configuration ) {
 		self.scope         = $rootScope;
 		// Keep a reference to $q.
 		self.q             = $q;
+
+		// TODO: Using deferreds is an anti-pattern and probably provides no value here.
+		self.__dataAvailableDeferred    = self.q.defer();
+		self.__objectsAvailableDeferred = self.q.defer();
+		// A promise that is resolved once initial data synchronization has taken place.
+		self.dataAvailable              = self.__dataAvailableDeferred.promise;
+		// A promise that is resolved once the received data is extended to models.
+		self.objectsAvailable           = self.__objectsAvailableDeferred.promise;
 
 		// Prefix log messages with this string.
 		self.logPrefix = "absync:" + name.toLocaleUpperCase() + " ";
@@ -385,6 +385,18 @@ function getServiceConstructor( name, configuration ) {
 
 	CacheService.prototype.sync = function CacheService$sync() {
 		var self = this;
+
+		// Reset deferreds.
+		self.__dataAvailableDeferred    = self.q.defer();
+		self.__objectsAvailableDeferred = self.q.defer();
+		// Reset promises.
+		self.dataAvailable              = self.__dataAvailableDeferred.promise;
+		self.objectsAvailable           = self.__objectsAvailableDeferred.promise;
+
+		// Ensure __onDataAvailable will be invoked on success.
+		self.dataAvailable
+			.then( self.__onDataAvailable.bind( self ) );
+
 		return self.ensureLoaded( true );
 	};
 
