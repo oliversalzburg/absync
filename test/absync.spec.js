@@ -39,6 +39,15 @@ describe( "absync", function() {
 					name : "My Device"
 				} ]
 			} );
+
+		$httpBackend
+			.when( "GET", "/api/device/1" )
+			.respond( {
+				device : {
+					id   : 1,
+					name : "My Device"
+				}
+			} );
 	} ) );
 
 	beforeEach( inject( function( _devices_ ) {
@@ -89,6 +98,16 @@ describe( "absync", function() {
 			.then( done )
 			.catch( done );
 		$rootScope.$digest();
+	} );
+
+	it( "should provide an entity when collection is not loaded", function( done ) {
+		devices.read( 1 )
+			.then( function( device ) {
+				expect( device ).to.be.an( "object" ).with.property( "name" ).that.equals( "My Device" );
+			} )
+			.then( done )
+			.catch( done );
+		$httpBackend.flush();
 	} );
 } );
 
