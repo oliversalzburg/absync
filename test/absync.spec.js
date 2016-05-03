@@ -43,6 +43,7 @@ describe( "absync", function() {
 
 	beforeEach( inject( function( _devices_ ) {
 		devices = _devices_;
+		devices.reset();
 	} ) );
 
 	it( "should construct a caching service", function() {
@@ -53,6 +54,29 @@ describe( "absync", function() {
 		devices.ensureLoaded();
 		$httpBackend.flush();
 		expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
+	} );
+
+	it( "should cached the loaded collection", function() {
+		devices.ensureLoaded();
+		$httpBackend.flush();
+		expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
+
+		var entity = devices.entityCache[ 0 ];
+
+		devices.ensureLoaded();
+		expect( devices.entityCache[ 0 ] ).to.equal( entity );
+	} );
+
+	it( "should forget cached collections when reset", function() {
+		devices.ensureLoaded();
+		$httpBackend.flush();
+		expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
+
+		var entity = devices.entityCache[ 0 ];
+		devices.reset();
+
+		devices.ensureLoaded();
+		expect( devices.entityCache[ 0 ] ).to.not.equal( entity );
 	} );
 
 	it( "should provide an entity", function( done ) {

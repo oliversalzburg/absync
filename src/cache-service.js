@@ -91,14 +91,6 @@ function getServiceConstructor( name, configuration ) {
 		// Keep a reference to $q.
 		self.q             = $q;
 
-		// TODO: Using deferreds is an anti-pattern and probably provides no value here.
-		self.__dataAvailableDeferred    = self.q.defer();
-		self.__objectsAvailableDeferred = self.q.defer();
-		// A promise that is resolved once initial data synchronization has taken place.
-		self.dataAvailable              = self.__dataAvailableDeferred.promise;
-		// A promise that is resolved once the received data is extended to models.
-		self.objectsAvailable           = self.__objectsAvailableDeferred.promise;
-
 		// Prefix log messages with this string.
 		self.logPrefix = "absync:" + name.toLocaleUpperCase() + " ";
 
@@ -869,6 +861,19 @@ function getServiceConstructor( name, configuration ) {
 			// When the complex was retrieved, store it back into the entity.
 			entity[ propertyName ] = complex;
 		}
+	};
+
+	/**
+	 * Reset the state of the cache service to when it was first instantiated.
+	 * Assumes that the configuration was not touched.
+	 * This method is primarily targeted at testing, but can be useful in production as well.
+	 */
+	CacheService.prototype.reset = function CacheService$reset() {
+		var self = this;
+
+		self.entityCache      = self.configuration.collectionName ? [] : {};
+		self.__entityCacheRaw = null;
+		self.__requestCache   = {};
 	};
 
 	return CacheService;
