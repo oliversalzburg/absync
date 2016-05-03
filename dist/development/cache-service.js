@@ -191,20 +191,16 @@ function getServiceConstructor( name, configuration ) {
 		var self            = this;
 		var _entityReceived = args;
 
-		// Defer processing until data has been received initially.
-		return self.dataAvailable
-			.then( function handleReceivedEntity() {
-				// Determine if the received record consists ONLY of an id property,
-				// which would mean that this record was deleted from the backend.
-				if( 1 === Object.keys( _entityReceived ).length && _entityReceived.hasOwnProperty( "id" ) ) {
-					self.logInterface.info( self.logPrefix + "Entity was deleted from the server. Updating cache…" );
-					return self.__removeEntityFromCache( _entityReceived.id );
+		// Determine if the received record consists ONLY of an id property,
+		// which would mean that this record was deleted from the backend.
+		if( 1 === Object.keys( _entityReceived ).length && _entityReceived.hasOwnProperty( "id" ) ) {
+			self.logInterface.info( self.logPrefix + "Entity was deleted from the server. Updating cache…" );
+			return self.__removeEntityFromCache( _entityReceived.id );
 
-				} else {
-					self.logInterface.debug( self.logPrefix + "Entity was updated on the server. Updating cache…" );
-					return self.__updateCacheWithEntity( self.deserializer( _entityReceived ) );
-				}
-			} );
+		} else {
+			self.logInterface.debug( self.logPrefix + "Entity was updated on the server. Updating cache…" );
+			return self.__updateCacheWithEntity( self.deserializer( _entityReceived ) );
+		}
 	};
 
 	/**
@@ -243,11 +239,8 @@ function getServiceConstructor( name, configuration ) {
 
 		// We only perform any loading, if we don't have raw data cached yet, or if we're forced.
 		if( null === self.__entityCacheRaw || forceReload ) {
-			self.__entityCacheRaw = [];
-
 			if( !configuration.collectionName || !configuration.collectionUri ) {
 				if( configuration.entityName && configuration.entityUri ) {
-					self.__entityCacheRaw = {};
 					return self.httpInterface
 						.get( self.allowBrowserCache.sync ? configuration.entityUri : self.__uncached(
 							configuration.entityUri ) )
@@ -280,6 +273,7 @@ function getServiceConstructor( name, configuration ) {
 			}
 
 			self.__entityCacheRaw = serverResponse.data;
+			self.entityCache.splice( 0, self.entityCache.length );
 			return self.__onDataAvailable( serverResponse.data );
 		}
 
@@ -339,45 +333,13 @@ function getServiceConstructor( name, configuration ) {
 		var self              = this;
 		self.__entityCacheRaw = cache;
 
-		if( Array.isArray( self.entityCache ) ) {
-			// Notify the rest of the application about a fresh collection.
-			self.scope.$broadcast( "collectionNew", {
-				service : self,
-				cache   : self.entityCache
-			} );
-
-		} else {
-			self.scope.$broadcast( "beforeEntityNew", {
-				service : self,
-				cache   : self.entityCache,
-				entity  : self.entityCache
-			} );
-
-			self.scope.$broadcast( "entityNew", {
-				service : self,
-				cache   : self.entityCache,
-				entity  : self.entityCache
-			} );
-
-			return self.__onDataAvailable( self.__entityCacheRaw );
-		}
-
-		return self;
+		return self.__onDataAvailable( self.__entityCacheRaw );
 	};
 
 	CacheService.prototype.sync = function CacheService$sync() {
 		var self = this;
 
-		// Reset deferreds.
-		self.__dataAvailableDeferred    = self.q.defer();
-		self.__objectsAvailableDeferred = self.q.defer();
-		// Reset promises.
-		self.dataAvailable              = self.__dataAvailableDeferred.promise;
-		self.objectsAvailable           = self.__objectsAvailableDeferred.promise;
-
-		// Ensure __onDataAvailable will be invoked on success.
-		self.dataAvailable
-			.then( self.__onDataAvailable.bind( self ) );
+		self.__entityCacheRaw = null;
 
 		return self.ensureLoaded( true );
 	};
