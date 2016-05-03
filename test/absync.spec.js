@@ -93,6 +93,7 @@ describe( "absync", function() {
 		$httpBackend.flush();
 		devices.read( 1 )
 			.then( function( device ) {
+				expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
 				expect( device ).to.be.an( "object" ).with.property( "name" ).that.equals( "My Device" );
 			} )
 			.then( done )
@@ -103,11 +104,52 @@ describe( "absync", function() {
 	it( "should provide an entity when collection is not loaded", function( done ) {
 		devices.read( 1 )
 			.then( function( device ) {
+				expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
 				expect( device ).to.be.an( "object" ).with.property( "name" ).that.equals( "My Device" );
 			} )
 			.then( done )
 			.catch( done );
 		$httpBackend.flush();
+	} );
+
+	it( "should provide seeded content", function( done ) {
+		devices.seed( {
+				devices : [ {
+					id   : 1,
+					name : "My Device"
+				} ]
+			}
+		);
+
+		devices.read( 1 )
+			.then( function( device ) {
+				expect( device ).to.be.an( "object" ).with.property( "name" ).that.equals( "My Device" );
+			} )
+			.then( done )
+			.catch( done );
+		$rootScope.$digest();
+	} );
+
+	it( "should provide updated content when syncing after seeding", function( done ) {
+		var seed = {
+			devices : [ {
+				id   : 1,
+				name : "My Device"
+			} ]
+		};
+
+		devices.seed( seed );
+
+		devices.sync();
+		$httpBackend.flush();
+
+		devices.read( 1 )
+			.then( function( device ) {
+				expect( device ).to.not.equal( seed.devices[ 0 ] );
+			} )
+			.then( done )
+			.catch( done );
+		$rootScope.$digest();
 	} );
 } );
 
