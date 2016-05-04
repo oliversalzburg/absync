@@ -81,14 +81,6 @@ function getServiceConstructor( name, configuration ) {
 		}, configuration.allowBrowserCache );
 		self.__uncached        = absyncUncachedFilter;
 
-		// TODO: Using deferreds is an anti-pattern and probably provides no value here.
-		self.__dataAvailableDeferred    = $q.defer();
-		self.__objectsAvailableDeferred = $q.defer();
-		// A promise that is resolved once initial data synchronization has taken place.
-		self.dataAvailable              = self.__dataAvailableDeferred.promise;
-		// A promise that is resolved once the received data is extended to models.
-		self.objectsAvailable           = self.__objectsAvailableDeferred.promise;
-
 		// Use $http by default and expose it on the service.
 		// This allows the user to set a different, possibly decorated, HTTP interface for this service.
 		self.httpInterface = $http;
@@ -127,10 +119,6 @@ function getServiceConstructor( name, configuration ) {
 		if( configuration.collectionName ) {
 			$rootScope.$on( configuration.collectionName, self.__onCollectionReceived.bind( self ) );
 		}
-
-		// Wait for data to be available.
-		self.dataAvailable
-			.then( self.__onDataAvailable.bind( self ) );
 
 		self.logInterface.info( self.logPrefix + "service was instantiated." );
 	}
@@ -172,10 +160,6 @@ function getServiceConstructor( name, configuration ) {
 			// they're doing.
 			angular.forEach( rawData[ configuration.collectionName ], deserializeCollectionEntry );
 
-			// Resolve our "objects are available" deferred.
-			// TODO: We could just as well initialize objectAvailable to the return value of this call block.
-			self.__objectsAvailableDeferred.resolve( self.entityCache );
-
 			// Notify the rest of the application about a fresh collection.
 			self.scope.$broadcast( "collectionNew", {
 				service : self,
@@ -185,11 +169,9 @@ function getServiceConstructor( name, configuration ) {
 		} else {
 			var deserialized = self.deserializer( rawData[ configuration.entityName ] );
 			self.__updateCacheWithEntity( deserialized );
-
-			// Resolve our "objects are available" deferred.
-			// TODO: We could just as well initialize objectAvailable to the return value of this call block.
-			self.__objectsAvailableDeferred.resolve( self.entityCache );
 		}
+
+		return self.entityCache;
 
 		function deserializeCollectionEntry( rawEntity ) {
 			self.entityCache.push( self.deserializer( rawEntity ) );
@@ -206,20 +188,16 @@ function getServiceConstructor( name, configuration ) {
 		var self            = this;
 		var _entityReceived = args;
 
-		// Defer processing until data has been received initially.
-		return self.dataAvailable
-			.then( function handleReceivedEntity() {
-				// Determine if the received record consists ONLY of an id property,
-				// which would mean that this record was deleted from the backend.
-				if( 1 === Object.keys( _entityReceived ).length && _entityReceived.hasOwnProperty( "id" ) ) {
-					self.logInterface.info( self.logPrefix + "Entity was deleted from the server. Updating cache…" );
-					return self.__removeEntityFromCache( _entityReceived.id );
+		// Determine if the received record consists ONLY of an id property,
+		// which would mean that this record was deleted from the backend.
+		if( 1 === Object.keys( _entityReceived ).length && _entityReceived.hasOwnProperty( "id" ) ) {
+			self.logInterface.info( self.logPrefix + "Entity was deleted from the server. Updating cache…" );
+			return self.__removeEntityFromCache( _entityReceived.id );
 
-				} else {
-					self.logInterface.debug( self.logPrefix + "Entity was updated on the server. Updating cache…" );
-					return self.__updateCacheWithEntity( self.deserializer( _entityReceived ) );
-				}
-			} );
+		} else {
+			self.logInterface.debug( self.logPrefix + "Entity was updated on the server. Updating cache…" );
+			return self.__updateCacheWithEntity( self.deserializer( _entityReceived ) );
+		}
 	};
 
 	/**
@@ -258,12 +236,9 @@ function getServiceConstructor( name, configuration ) {
 
 		// We only perform any loading, if we don't have raw data cached yet, or if we're forced.
 		if( null === self.__entityCacheRaw || forceReload ) {
-			self.__entityCacheRaw = [];
-
 			if( !configuration.collectionName || !configuration.collectionUri ) {
 				if( configuration.entityName && configuration.entityUri ) {
-					self.__entityCacheRaw = {};
-					self.httpInterface
+					return self.httpInterface
 						.get( self.allowBrowserCache.sync ? configuration.entityUri : self.__uncached(
 							configuration.entityUri ) )
 						.then( onSingleEntityReceived, onSingleEntityRetrievalFailure );
@@ -276,23 +251,14 @@ function getServiceConstructor( name, configuration ) {
 
 			} else {
 				self.logInterface.info( self.logPrefix + "Retrieving '" + configuration.collectionName + "' collection…" );
-				self.httpInterface
+				return self.httpInterface
 					.get( self.allowBrowserCache.sync ? configuration.collectionUri : self.__uncached(
 						configuration.collectionUri ) )
 					.then( onCollectionReceived, onCollectionRetrievalFailure );
 			}
 		}
 
-		// Return a promise that is resolved once the data was read and converted to models.
-		// When the promise is resolved, it will return a reference to the entity cache.
-		return self.q.all(
-			[
-				self.dataAvailable,
-				self.objectsAvailable
-			] )
-			.then( function dataAvailable() {
-				return self.entityCache;
-			} );
+		return self.q.when( self.entityCache );
 
 		/**
 		 * Invoked when the collection was received from the server.
@@ -304,7 +270,8 @@ function getServiceConstructor( name, configuration ) {
 			}
 
 			self.__entityCacheRaw = serverResponse.data;
-			self.__dataAvailableDeferred.resolve( serverResponse.data );
+			self.entityCache.splice( 0, self.entityCache.length );
+			return self.__onDataAvailable( serverResponse.data );
 		}
 
 		/**
@@ -317,7 +284,10 @@ function getServiceConstructor( name, configuration ) {
 			self.__entityCacheRaw = null;
 
 			self.scope.$emit( "absyncError", serverResponse );
-			self.__dataAvailableDeferred.reject( serverResponse );
+
+			if( self.throwFailures ) {
+				throw serverResponse;
+			}
 		}
 
 		/**
@@ -330,7 +300,7 @@ function getServiceConstructor( name, configuration ) {
 			}
 
 			self.__entityCacheRaw = serverResponse.data;
-			self.__dataAvailableDeferred.resolve( serverResponse.data );
+			self.__onDataAvailable( serverResponse.data );
 		}
 
 		/**
@@ -343,7 +313,10 @@ function getServiceConstructor( name, configuration ) {
 			self.__entityCacheRaw = null;
 
 			self.scope.$emit( "absyncError", serverResponse );
-			self.__dataAvailableDeferred.reject( serverResponse );
+
+			if( self.throwFailures ) {
+				throw serverResponse;
+			}
 		}
 	};
 
@@ -354,37 +327,17 @@ function getServiceConstructor( name, configuration ) {
 	 * @returns {CacheService}
 	 */
 	CacheService.prototype.seed = function CacheService$seed( cache ) {
-		var self         = this;
-		self.entityCache = cache;
+		var self              = this;
+		self.__entityCacheRaw = cache;
 
-		if( Array.isArray( self.entityCache ) ) {
-			// Notify the rest of the application about a fresh collection.
-			self.scope.$broadcast( "collectionNew", {
-				service : self,
-				cache   : self.entityCache
-			} );
-
-		} else {
-			self.scope.$broadcast( "beforeEntityNew", {
-				service : self,
-				cache   : self.entityCache,
-				entity  : self.entityCache
-			} );
-
-			self.scope.$broadcast( "entityNew", {
-				service : self,
-				cache   : self.entityCache,
-				entity  : self.entityCache
-			} );
-
-			self.__objectsAvailableDeferred.resolve( self.entityCache );
-		}
-
-		return self;
+		return self.__onDataAvailable( self.__entityCacheRaw );
 	};
 
 	CacheService.prototype.sync = function CacheService$sync() {
 		var self = this;
+
+		self.__entityCacheRaw = null;
+
 		return self.ensureLoaded( true );
 	};
 
@@ -870,6 +823,19 @@ function getServiceConstructor( name, configuration ) {
 			// When the complex was retrieved, store it back into the entity.
 			entity[ propertyName ] = complex;
 		}
+	};
+
+	/**
+	 * Reset the state of the cache service to when it was first instantiated.
+	 * Assumes that the configuration was not touched.
+	 * This method is primarily targeted at testing, but can be useful in production as well.
+	 */
+	CacheService.prototype.reset = function CacheService$reset() {
+		var self = this;
+
+		self.entityCache      = self.configuration.collectionName ? [] : {};
+		self.__entityCacheRaw = null;
+		self.__requestCache   = {};
 	};
 
 	return CacheService;
