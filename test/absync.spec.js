@@ -39,10 +39,20 @@ describe( "absync", function() {
 					name : "My Device"
 				} ]
 			} );
+
+		$httpBackend
+			.when( "GET", "/api/device/1" )
+			.respond( {
+				device : {
+					id   : 1,
+					name : "My Device"
+				}
+			} );
 	} ) );
 
 	beforeEach( inject( function( _devices_ ) {
 		devices = _devices_;
+		devices.reset();
 	} ) );
 
 	it( "should construct a caching service", function() {
@@ -55,12 +65,87 @@ describe( "absync", function() {
 		expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
 	} );
 
+	it( "should cached the loaded collection", function() {
+		devices.ensureLoaded();
+		$httpBackend.flush();
+		expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
+
+		var entity = devices.entityCache[ 0 ];
+
+		devices.ensureLoaded();
+		expect( devices.entityCache[ 0 ] ).to.equal( entity );
+	} );
+
+	it( "should forget cached collections when reset", function() {
+		devices.ensureLoaded();
+		$httpBackend.flush();
+		expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
+
+		var entity = devices.entityCache[ 0 ];
+		devices.reset();
+
+		devices.ensureLoaded();
+		expect( devices.entityCache[ 0 ] ).to.not.equal( entity );
+	} );
+
 	it( "should provide an entity", function( done ) {
 		devices.ensureLoaded();
 		$httpBackend.flush();
 		devices.read( 1 )
 			.then( function( device ) {
+				expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
 				expect( device ).to.be.an( "object" ).with.property( "name" ).that.equals( "My Device" );
+			} )
+			.then( done )
+			.catch( done );
+		$rootScope.$digest();
+	} );
+
+	it( "should provide an entity when collection is not loaded", function( done ) {
+		devices.read( 1 )
+			.then( function( device ) {
+				expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
+				expect( device ).to.be.an( "object" ).with.property( "name" ).that.equals( "My Device" );
+			} )
+			.then( done )
+			.catch( done );
+		$httpBackend.flush();
+	} );
+
+	it( "should provide seeded content", function( done ) {
+		devices.seed( {
+				devices : [ {
+					id   : 1,
+					name : "My Device"
+				} ]
+			}
+		);
+
+		devices.read( 1 )
+			.then( function( device ) {
+				expect( device ).to.be.an( "object" ).with.property( "name" ).that.equals( "My Device" );
+			} )
+			.then( done )
+			.catch( done );
+		$rootScope.$digest();
+	} );
+
+	it( "should provide updated content when syncing after seeding", function( done ) {
+		var seed = {
+			devices : [ {
+				id   : 1,
+				name : "My Device"
+			} ]
+		};
+
+		devices.seed( seed );
+
+		devices.sync();
+		$httpBackend.flush();
+
+		devices.read( 1 )
+			.then( function( device ) {
+				expect( device ).to.not.equal( seed.devices[ 0 ] );
 			} )
 			.then( done )
 			.catch( done );
