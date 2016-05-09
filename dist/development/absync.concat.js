@@ -814,14 +814,18 @@ function getServiceConstructor( name, configuration ) {
 		}
 
 		if( serverResponse.data[ configuration.entityName ] ) {
-			var newEntity = self.deserializer( serverResponse.data[ configuration.entityName ] );
-
+			var rawEntity = serverResponse.data[ configuration.entityName ];
 			// If early cache updates are forced, put the return entity into the cache.
 			if( self.forceEarlyCacheUpdate ) {
+				var newEntity = self.deserializer( rawEntity );
 				self.__updateCacheWithEntity( newEntity );
+
+				if( returnResult ) {
+					return newEntity;
+				}
 			}
 			if( returnResult ) {
-				return newEntity;
+				return rawEntity;
 			}
 		}
 	}
