@@ -34,14 +34,14 @@ function getServiceConstructor( name, configuration ) {
 	 * @param {angular.ILogService|Object} $log
 	 * @param {angular.IQService|Object} $q
 	 * @param {angular.IRootScopeService|Object} $rootScope
-	 * @param {AbsyncService} absync
+	 * @param {AbsyncProvider} absync
 	 * @param {Object} absyncNoopLog A log interface that does nothing.
 	 * @param {Object} absyncUncachedFilter A filter that mutates URLs so they will bypass the browser cache.
 	 * @returns {CacheService}
 	 * @ngInject
 	 */
-	CacheService.$inject = ["$http", "$injector", "$log", "$q", "$rootScope", "absync", "absyncNoopLog", "absyncUncachedFilter"];
-	function CacheService( $http, $injector, $log, $q, $rootScope, absync, absyncNoopLog, absyncUncachedFilter ) {
+	CacheService.$inject = ["$http", "$injector", "$log", "$q", "$rootScope", "absyncNoopLog", "absync", "absyncUncachedFilter"];
+	function CacheService( $http, $injector, $log, $q, $rootScope, absyncNoopLog, absync, absyncUncachedFilter ) {
 		var self = this;
 
 		// Retrieve a reference to the model of the collection that is being cached.
