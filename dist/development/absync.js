@@ -132,6 +132,8 @@ AbsyncProvider.prototype.disconnect = function AbsyncProvider$disconnect( discon
 		self.__registerLater.push( listener );
 	} );
 
+	self.__listeners = [];
+
 	if( disconnectSocket ) {
 		self.__ioSocket.disconnect();
 		self.__ioSocket = null;
