@@ -48,6 +48,8 @@ function AbsyncProvider( $injector, $provide, absyncCache ) {
 	// If socket.io was not connected when a service was constructed, we put the registration request
 	// into this array and register it as soon as socket.io is configured.
 	self.__registerLater = [];
+	// References to all registered event listeners.
+	self.__listeners     = [];
 
 	// The collections that absync provides.
 	// The keys are the names of the collections, the value contains the constructor of
@@ -112,9 +114,40 @@ AbsyncProvider.prototype.configure = function AbsyncProvider$configure( configur
 	}
 };
 
+/**
+ * Detaches absync from the websocket.
+ * @param {Boolean} [disconnectSocket=false] Should the underlying socket.io connection be disconnected as well?
+ */
+AbsyncProvider.prototype.disconnect = function AbsyncProvider$disconnect( disconnectSocket ) {
+	var self = this;
+
+	disconnectSocket = disconnectSocket || false;
+
+	angular.forEach( self.__listeners, function unregisterListener( listener ) {
+		listener.unregister();
+		delete listener.unregister;
+		self.__registerLater.push( listener );
+	} );
+
+	if( disconnectSocket ) {
+		self.__ioSocket.disconnect();
+		self.__ioSocket = null;
+	}
+};
+
+/**
+ * Register an event listener with socket.io.
+ * @param {Object} listener
+ * @private
+ */
 AbsyncProvider.prototype.__registerListener = function AbsyncProvider$registerListener( listener ) {
 	var self = this;
-	self.$get().__handleEntityEvent( listener.eventName, listener.callback );
+
+	// Remember this listener.
+	self.__listeners.push( listener );
+
+	// Register the listener and remember the function to use when the listener should be unregistered.
+	listener.unregister = self.__handleEntityEvent( listener.eventName, listener.callback );
 };
 
 /**
@@ -183,38 +216,6 @@ AbsyncProvider.prototype.entity = function AbsyncProvider$entity( name, configur
 	self.__provide.service( name, self.__entities[ name ].constructor );
 };
 
-/**
- * Register the service factory.
- * @returns {AbsyncService}
- * @ngInject
- */
-AbsyncProvider.prototype.$get = function AbsyncProvider$$get() {
-	return new AbsyncService( this );
-};
-
-/**
- * The service that is received when injecting "absync".
- * This service is primarily used internally to set up the connection between socket.io and the individual
- * caching services.
- * @param {AbsyncProvider|Object} parentProvider The AbsyncProvider that provides this service.
- * @constructor
- */
-function AbsyncService( parentProvider ) {
-	this.__absyncProvider = parentProvider;
-}
-
-/**
- * Configure the socket.io connection for absync.
- * This configuration of absync should usually be performed through the absyncProvider in the configuration
- * phase of a module.
- * @param {Object} configuration The configuration for the absync provider.
- * Can have a member `socket`, pointing to the socket.io instance or constructor to use.
- * Can have a member `debug`, enabling debugging, if set to true.
- */
-AbsyncService.prototype.configure = function AbsyncService$configure( configuration ) {
-	var _absyncProvider = this.__absyncProvider;
-	_absyncProvider.configure( configuration );
-};
 
 /**
  * Register an event listener that is called when a specific entity is received on the websocket.
@@ -224,27 +225,29 @@ AbsyncService.prototype.configure = function AbsyncService$configure( configurat
  * the event listener.
  * If the listener registration was delayed, null is returned.
  */
-AbsyncService.prototype.on = function AbsyncService$on( eventName, callback ) {
-	var _absyncProvider = this.__absyncProvider;
-	var self            = this;
+AbsyncProvider.prototype.on = function AbsyncProvider$on( eventName, callback ) {
+	var self = this;
 
 	// If we have no configured socket.io connection yet, remember to register it later.
-	if( !_absyncProvider.__ioSocket ) {
+	if( !self.__ioSocket ) {
 
-		if( _absyncProvider.__registerLater.length > 8192 ) {
+		if( self.__registerLater.length > 8192 ) {
 			// Be defensive, something is probably not right here.
 			return null;
 		}
 
 		// TODO: Use promises here, so that we can always return the event listener removal function.
-		_absyncProvider.__registerLater.push( {
+		self.__registerLater.push( {
 			eventName : eventName,
 			callback  : callback
 		} );
 		return null;
 	}
 
-	return self.__handleEntityEvent( eventName, callback );
+	return self.__registerListener( {
+		eventName : eventName,
+		callback  : callback
+	} );
 };
 
 /**
@@ -253,35 +256,44 @@ AbsyncService.prototype.on = function AbsyncService$on( eventName, callback ) {
  * @param {Function} callback The function to call when the entity is received.
  * @returns {Function}
  */
-AbsyncService.prototype.__handleEntityEvent = function AbsyncService$handleEntityEvent( eventName, callback ) {
-	var _absyncProvider = this.__absyncProvider;
+AbsyncProvider.prototype.__handleEntityEvent = function AbsyncProvider$handleEntityEvent( eventName, callback ) {
+	var self = this;
 
 	// Register the callback with socket.io.
-	_absyncProvider.__ioSocket.on( eventName, callback );
+	self.__ioSocket.on( eventName, callback );
 
 	// Return a function that removes the listener.
 	return function removeListener() {
-		_absyncProvider.__ioSocket.removeListener( eventName, callback );
+		self.__ioSocket.removeListener( eventName, callback );
 	};
 };
 
 /**
- * Convenience method to allow the user to emit() from the websocket.
+ * Convenience method to allow the user to emit() from the socket.io connection.
  * This is not utilized in absync internally.
  * @param {String} eventName
  * @param {*} data
  * @param {Function} [callback]
  */
-AbsyncService.prototype.emit = function AbsyncService$emit( eventName, data, callback ) {
-	var _absyncProvider = this.__absyncProvider;
+AbsyncProvider.prototype.emit = function AbsyncProvider$emit( eventName, data, callback ) {
+	var self = this;
 
-	if( !_absyncProvider.__ioSocket ) {
+	if( !self.__ioSocket ) {
 		throw new Error( "socket.io is not initialized." );
 	}
 
-	_absyncProvider.__ioSocket.emit( eventName, data, function afterEmit() {
+	self.__ioSocket.emit( eventName, data, function afterEmit() {
 		if( callback ) {
-			callback.apply( _absyncProvider.__ioSocket, arguments );
+			callback.apply( self.__ioSocket, arguments );
 		}
 	} );
+};
+
+/**
+ * The service is just used as a convenience to access the provider.
+ * @returns {AbsyncProvider}
+ * @ngInject
+ */
+AbsyncProvider.prototype.$get = function AbsyncProvider$$get() {
+	return this;
 };
