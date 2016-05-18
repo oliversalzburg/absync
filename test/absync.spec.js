@@ -22,7 +22,11 @@ describe( "absync", function() {
 				_absyncProvider_.configure( SockMock );
 				_absyncProvider_.collection( "devices", serviceDefinition );
 			} )
-			.constant( "Device", {} );
+			.constant( "Device", {
+				deserialize : function( data ) {
+					return angular.copy( data );
+				}
+			} );
 
 		module( "absync", "test" );
 	} );
@@ -48,6 +52,19 @@ describe( "absync", function() {
 					name : "My Device"
 				}
 			} );
+
+		$httpBackend
+			.when( "GET", "/api/device/2" )
+			.respond( {
+				device : {
+					id   : 2,
+					name : "Another Device"
+				}
+			} );
+
+		$httpBackend
+			.when( "DELETE", "/api/device/1" )
+			.respond( 200 );
 	} ) );
 
 	beforeEach( inject( function( _devices_ ) {
@@ -65,91 +82,169 @@ describe( "absync", function() {
 		expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
 	} );
 
-	it( "should cached the loaded collection", function() {
-		devices.ensureLoaded();
-		$httpBackend.flush();
-		expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
+	describe( "caching", function() {
+		it( "should cached the loaded collection", function() {
+			devices.ensureLoaded();
+			$httpBackend.flush();
+			expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
 
-		var entity = devices.entityCache[ 0 ];
+			var entity = devices.entityCache[ 0 ];
 
-		devices.ensureLoaded();
-		expect( devices.entityCache[ 0 ] ).to.equal( entity );
+			devices.ensureLoaded();
+			expect( devices.entityCache[ 0 ] ).to.equal( entity );
+		} );
+
+		it( "should forget cached collections when reset", function() {
+			devices.ensureLoaded();
+			$httpBackend.flush();
+			expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
+
+			var entity = devices.entityCache[ 0 ];
+			devices.reset();
+
+			devices.ensureLoaded();
+			expect( devices.entityCache[ 0 ] ).to.not.equal( entity );
+		} );
+
+		it( "should maintain the raw entity cache for reads", function( done ) {
+			devices.ensureLoaded();
+			$httpBackend.flush();
+			expect( devices.__entityCacheRaw.devices ).to.be.an( "array" ).with.length( 1 );
+			expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
+
+			devices.read( 2 )
+				.then( function( device ) {
+					expect( devices.__entityCacheRaw.devices ).to.be.an( "array" ).with.length( 2 );
+					expect( devices.entityCache ).to.be.an( "array" ).with.length( 2 );
+				} )
+				.then( done )
+				.catch( done );
+			$httpBackend.flush();
+			$rootScope.$digest();
+		} );
+
+		it( "should maintain the raw entity cache for deletes", function( done ) {
+			devices.ensureLoaded();
+			$httpBackend.flush();
+			expect( devices.__entityCacheRaw.devices ).to.be.an( "array" ).with.length( 1 );
+			expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
+
+			devices.delete( {
+					id : 1
+				} )
+				.then( function() {
+					expect( devices.__entityCacheRaw.devices ).to.be.an( "array" ).with.length( 0 );
+					expect( devices.entityCache ).to.be.an( "array" ).with.length( 0 );
+				} )
+				.then( done )
+				.catch( done );
+			$httpBackend.flush();
+			$rootScope.$digest();
+		} );
+
+		it( "should maintain the raw entity cache for updates over socket", function() {
+			devices.ensureLoaded();
+			$httpBackend.flush();
+			expect( devices.__entityCacheRaw.devices ).to.be.an( "array" ).with.length( 1 );
+			expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
+
+			var updated = {
+				id   : 1,
+				name : "My Updated Device"
+			};
+
+			devices.__onEntityReceived( null, updated );
+
+			expect( devices.__entityCacheRaw.devices ).to.be.an( "array" ).with.length( 1 );
+			expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
+
+			expect( devices.__entityCacheRaw.devices[ 0 ] ).to.eql( updated );
+			expect( devices.entityCache[ 0 ] ).to.eql( updated );
+		} );
+
+		it( "should maintain the raw entity cache for deletes over socket", function() {
+			devices.ensureLoaded();
+			$httpBackend.flush();
+			expect( devices.__entityCacheRaw.devices ).to.be.an( "array" ).with.length( 1 );
+			expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
+
+			var deleted = {
+				id : 1
+			};
+
+			devices.__onEntityReceived( null, deleted );
+
+			expect( devices.__entityCacheRaw.devices ).to.be.an( "array" ).with.length( 0 );
+			expect( devices.entityCache ).to.be.an( "array" ).with.length( 0 );
+		} );
 	} );
 
-	it( "should forget cached collections when reset", function() {
-		devices.ensureLoaded();
-		$httpBackend.flush();
-		expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
+	describe( "reads", function() {
+		it( "should provide an entity", function( done ) {
+			devices.ensureLoaded();
+			$httpBackend.flush();
+			devices.read( 1 )
+				.then( function( device ) {
+					expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
+					expect( device ).to.be.an( "object" ).with.property( "name" ).that.equals( "My Device" );
+				} )
+				.then( done )
+				.catch( done );
+			$rootScope.$digest();
+		} );
 
-		var entity = devices.entityCache[ 0 ];
-		devices.reset();
-
-		devices.ensureLoaded();
-		expect( devices.entityCache[ 0 ] ).to.not.equal( entity );
+		it( "should provide an entity when collection is not loaded", function( done ) {
+			devices.read( 1 )
+				.then( function( device ) {
+					expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
+					expect( device ).to.be.an( "object" ).with.property( "name" ).that.equals( "My Device" );
+				} )
+				.then( done )
+				.catch( done );
+			$httpBackend.flush();
+		} );
 	} );
 
-	it( "should provide an entity", function( done ) {
-		devices.ensureLoaded();
-		$httpBackend.flush();
-		devices.read( 1 )
-			.then( function( device ) {
-				expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
-				expect( device ).to.be.an( "object" ).with.property( "name" ).that.equals( "My Device" );
-			} )
-			.then( done )
-			.catch( done );
-		$rootScope.$digest();
-	} );
+	describe( "seeding", function() {
+		it( "should provide seeded content", function( done ) {
+			devices.seed( {
+					devices : [ {
+						id   : 1,
+						name : "My Device"
+					} ]
+				}
+			);
 
-	it( "should provide an entity when collection is not loaded", function( done ) {
-		devices.read( 1 )
-			.then( function( device ) {
-				expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
-				expect( device ).to.be.an( "object" ).with.property( "name" ).that.equals( "My Device" );
-			} )
-			.then( done )
-			.catch( done );
-		$httpBackend.flush();
-	} );
+			devices.read( 1 )
+				.then( function( device ) {
+					expect( device ).to.be.an( "object" ).with.property( "name" ).that.equals( "My Device" );
+				} )
+				.then( done )
+				.catch( done );
+			$rootScope.$digest();
+		} );
 
-	it( "should provide seeded content", function( done ) {
-		devices.seed( {
+		it( "should provide updated content when syncing after seeding", function( done ) {
+			var seed = {
 				devices : [ {
 					id   : 1,
 					name : "My Device"
 				} ]
-			}
-		);
+			};
 
-		devices.read( 1 )
-			.then( function( device ) {
-				expect( device ).to.be.an( "object" ).with.property( "name" ).that.equals( "My Device" );
-			} )
-			.then( done )
-			.catch( done );
-		$rootScope.$digest();
-	} );
+			devices.seed( seed );
 
-	it( "should provide updated content when syncing after seeding", function( done ) {
-		var seed = {
-			devices : [ {
-				id   : 1,
-				name : "My Device"
-			} ]
-		};
+			devices.sync();
+			$httpBackend.flush();
 
-		devices.seed( seed );
-
-		devices.sync();
-		$httpBackend.flush();
-
-		devices.read( 1 )
-			.then( function( device ) {
-				expect( device ).to.not.equal( seed.devices[ 0 ] );
-			} )
-			.then( done )
-			.catch( done );
-		$rootScope.$digest();
+			devices.read( 1 )
+				.then( function( device ) {
+					expect( device ).to.not.equal( seed.devices[ 0 ] );
+				} )
+				.then( done )
+				.catch( done );
+			$rootScope.$digest();
+		} );
 	} );
 } );
 
