@@ -628,7 +628,7 @@ function getServiceConstructor( name, configuration ) {
 		return self.__cacheMaintain( self.entityCache, entityToCache, "update", true );
 	};
 
-	CacheService.prototype.__cacheMaintain = function CacheService$__cacheMaintain( cache, entityToCache, operation, emit ) {
+	CacheService.prototype.__cacheMaintain = function CacheService$cacheMaintain( cache, entityToCache, operation, emit ) {
 		var self = this;
 
 		var entityIndex = 0;
@@ -649,7 +649,7 @@ function getServiceConstructor( name, configuration ) {
 					}
 
 					if( typeof cache.copyFrom === "function" ) {
-						chache.copyFrom( entityToCache );
+						cache.copyFrom( entityToCache );
 
 					} else {
 						angular.extend( cache, entityToCache );
@@ -666,7 +666,7 @@ function getServiceConstructor( name, configuration ) {
 				}
 
 				var found = false;
-				for( ; entityIndex < cache.length; ++entityIndex, entity = cache[ entityIndex ] ) {
+				for( angular.noop; entityIndex < cache.length; ++entityIndex, entity = cache[ entityIndex ] ) {
 					if( entity.id === entityToCache.id ) {
 						if( emit ) {
 							// Allow the user to intervene in the update process, before updating the entity.
@@ -727,7 +727,7 @@ function getServiceConstructor( name, configuration ) {
 
 			case "delete":
 				// The "delete" operation is not expected to happen for single cached entities.
-				for( ; entityIndex < cache.length; ++entityIndex, entity = cache[ entityIndex ] ) {
+				for( angular.noop; entityIndex < cache.length; ++entityIndex, entity = cache[ entityIndex ] ) {
 					if( entity.id === entityToCache.id ) {
 						if( emit ) {
 							// Before removing the entity, allow the user to react.
