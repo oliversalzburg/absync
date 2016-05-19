@@ -267,12 +267,19 @@ function getServiceConstructor( name, configuration ) {
 		var self = this;
 
 		forceReload = forceReload === true;
+		if( forceReload ) {
+			delete self.__loading;
+		}
+
+		if( self.__loading ) {
+			return self.__loading;
+		}
 
 		// We only perform any loading, if we don't have raw data cached yet, or if we're forced.
 		if( null === self.__entityCacheRaw || forceReload ) {
 			if( !configuration.collectionName || !configuration.collectionUri ) {
 				if( configuration.entityName && configuration.entityUri ) {
-					return self.httpInterface
+					self.__loading = self.httpInterface
 						.get( self.allowBrowserCache.sync ? configuration.entityUri : self.__uncached(
 							configuration.entityUri ) )
 						.then( onSingleEntityReceived, onSingleEntityRetrievalFailure );
@@ -285,11 +292,13 @@ function getServiceConstructor( name, configuration ) {
 
 			} else {
 				self.logInterface.info( self.logPrefix + "Retrieving '" + configuration.collectionName + "' collection…" );
-				return self.httpInterface
+				self.__loading = self.httpInterface
 					.get( self.allowBrowserCache.sync ? configuration.collectionUri : self.__uncached(
 						configuration.collectionUri ) )
 					.then( onCollectionReceived, onCollectionRetrievalFailure );
 			}
+
+			return self.__loading;
 		}
 
 		return self.q.when( self.entityCache );
