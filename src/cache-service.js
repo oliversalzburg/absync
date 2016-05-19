@@ -61,9 +61,11 @@ function getServiceConstructor( name, configuration ) {
 		// We must never replace the cache with a new array or object, we must always manipulate the existing one.
 		// Otherwise watchers will not behave as the user expects them to.
 		/* @type {Array<configuration.model>|configuration.model} */
-		self.entityCache      = configuration.collectionName ? [] : {};
+		self.entityCache          = configuration.collectionName ? [] : {};
+		// Create the ID -> entityIndex lookup table.
+		self.entityCache.__lookup = {};
 		// The raw cache is data that hasn't been deserialized and is used internally.
-		self.__entityCacheRaw = null;
+		self.__entityCacheRaw     = null;
 
 		// Should request caching be used at all?
 		self.enableRequestCache = true;
@@ -174,7 +176,11 @@ function getServiceConstructor( name, configuration ) {
 		return self.entityCache;
 
 		function deserializeCollectionEntry( rawEntity ) {
-			self.entityCache.push( self.deserializer( rawEntity ) );
+			var entityToCache = self.deserializer( rawEntity );
+			self.entityCache.push( entityToCache );
+			if( self.entityCache.__lookup ) {
+				self.entityCache.__lookup[ entityToCache.id ] = self.entityCache.length - 1;
+			}
 		}
 	};
 
@@ -379,6 +385,10 @@ function getServiceConstructor( name, configuration ) {
 
 		if( !forceReload ) {
 			// Check if the entity is in the cache and return instantly if found.
+			if( self.entityCache.__lookup ) {
+				entityIndex = self.entityCache.__lookup[ id ] || self.entityCache.length;
+			}
+
 			for( var entityIndex = 0, entity = self.entityCache[ 0 ];
 			     entityIndex < self.entityCache.length;
 			     ++entityIndex, entity = self.entityCache[ entityIndex ] ) {
@@ -638,11 +648,23 @@ function getServiceConstructor( name, configuration ) {
 		return self.__cacheMaintain( self.entityCache, entityToCache, "update", true );
 	};
 
+	/**
+	 * Perform maintenance operations on a cache.
+	 * @param cache The cache to operate on.
+	 * @param entityToCache The entity that the operation is relating to.
+	 * @param {String} operation The operation to perform.
+	 * @param {Boolean} [emit=false] Should appropriate absync events be broadcast to notify other actors?
+	 * @private
+	 */
 	CacheService.prototype.__cacheMaintain = function CacheService$cacheMaintain( cache, entityToCache, operation, emit ) {
 		var self = this;
 
 		var entityIndex = 0;
 		var entity      = cache[ entityIndex ];
+
+		if( cache.__lookup ) {
+			entityIndex = cache.__lookup[ entityToCache.id ] || cache.length;
+		}
 
 		switch( operation ) {
 			case "update":
@@ -724,6 +746,9 @@ function getServiceConstructor( name, configuration ) {
 					}
 
 					cache.push( entityToCache );
+					if( cache.__lookup ) {
+						cache.__lookup[ entityToCache.id ] = cache.length - 1;
+					}
 
 					if( emit ) {
 						self.scope.$broadcast( "entityNew", {
@@ -750,6 +775,14 @@ function getServiceConstructor( name, configuration ) {
 
 						// Remove the entity from the cache.
 						cache.splice( entityIndex, 1 );
+
+						if( cache.__lookup ) {
+							for( var cacheEntry in cache.__lookup ) {
+								if( entityIndex <= cache.__lookup[ cacheEntry ] ) {
+									--cache.__lookup[ cacheEntry ];
+								}
+							}
+						}
 
 						if( emit ) {
 							// Send another event to allow the user to take note of the removal.
@@ -787,7 +820,10 @@ function getServiceConstructor( name, configuration ) {
 	CacheService.prototype.lookupTableById = function CacheService$lookupTableById() {
 		var self = this;
 
-		// TODO: Keep a copy of the lookup table and only update it when the cached data updates
+		if( self.entityCache.__lookup ) {
+			return angular.copy( self.entityCache.__lookup );
+		}
+
 		var lookupTable = [];
 		for( var entityIndex = 0;
 		     entityIndex < self.entityCache.length;
@@ -972,7 +1008,9 @@ function getServiceConstructor( name, configuration ) {
 	CacheService.prototype.reset = function CacheService$reset() {
 		var self = this;
 
-		self.entityCache      = self.configuration.collectionName ? [] : {};
+		self.entityCache          = self.configuration.collectionName ? [] : {};
+		self.entityCache.__lookup = self.entityCache.__lookup || {};
+
 		self.__entityCacheRaw = null;
 		self.__requestCache   = {};
 	};
