@@ -64,9 +64,11 @@ function getServiceConstructor( name, configuration ) {
 		// We must never replace the cache with a new array or object, we must always manipulate the existing one.
 		// Otherwise watchers will not behave as the user expects them to.
 		/* @type {Array<configuration.model>|configuration.model} */
-		self.entityCache      = configuration.collectionName ? [] : {};
+		self.entityCache          = configuration.collectionName ? [] : {};
+		// Create the ID -> entityIndex lookup table.
+		self.entityCache.__lookup = {};
 		// The raw cache is data that hasn't been deserialized and is used internally.
-		self.__entityCacheRaw = null;
+		self.__entityCacheRaw     = null;
 
 		// Should request caching be used at all?
 		self.enableRequestCache = true;
@@ -177,7 +179,11 @@ function getServiceConstructor( name, configuration ) {
 		return self.entityCache;
 
 		function deserializeCollectionEntry( rawEntity ) {
-			self.entityCache.push( self.deserializer( rawEntity ) );
+			var entityToCache = self.deserializer( rawEntity );
+			self.entityCache.push( entityToCache );
+			if( self.entityCache.__lookup ) {
+				self.entityCache.__lookup[ entityToCache.id ] = self.entityCache.length - 1;
+			}
 		}
 	};
 
@@ -191,14 +197,36 @@ function getServiceConstructor( name, configuration ) {
 		var self            = this;
 		var _entityReceived = args;
 
+		// Check if our raw entity cache was even initialized.
+		// It's possible that it isn't, because websocket updates can be received before any manual requests
+		// were made to the backend.
+		if( !self.__entityCacheRaw || !self.__entityCacheRaw[ configuration.collectionName || configuration.entityName ] ) {
+			// We ignore this update and just stack a new read request on top of any existing ones.
+			// This makes sure that we load the freshest entity in an orderly fashion and lose the state we received
+			// here, as we're getting the latest version of the entity.
+			return self.read( _entityReceived.id );
+		}
+
 		// Determine if the received record consists ONLY of an id property,
 		// which would mean that this record was deleted from the backend.
 		if( 1 === Object.keys( _entityReceived ).length && _entityReceived.hasOwnProperty( "id" ) ) {
 			self.logInterface.info( self.logPrefix + "Entity was deleted from the server. Updating cache…" );
+
+			self.__cacheMaintain( self.__entityCacheRaw[ configuration.collectionName || configuration.entityName ],
+				_entityReceived,
+				"delete",
+				false );
+
 			return self.__removeEntityFromCache( _entityReceived.id );
 
 		} else {
 			self.logInterface.debug( self.logPrefix + "Entity was updated on the server. Updating cache…" );
+
+			self.__cacheMaintain( self.__entityCacheRaw[ configuration.collectionName || configuration.entityName ],
+				_entityReceived,
+				"update",
+				false );
+
 			return self.__updateCacheWithEntity( self.deserializer( _entityReceived ) );
 		}
 	};
@@ -360,6 +388,10 @@ function getServiceConstructor( name, configuration ) {
 
 		if( !forceReload ) {
 			// Check if the entity is in the cache and return instantly if found.
+			if( self.entityCache.__lookup ) {
+				entityIndex = self.entityCache.__lookup[ id ] || self.entityCache.length;
+			}
+
 			for( var entityIndex = 0, entity = self.entityCache[ 0 ];
 			     entityIndex < self.entityCache.length;
 			     ++entityIndex, entity = self.entityCache[ entityIndex ] ) {
@@ -384,11 +416,20 @@ function getServiceConstructor( name, configuration ) {
 				throw new Error( "The response from the server was not in the expected format. It should have a member named '" + configuration.entityName + "'." );
 			}
 
+			var rawEntity = serverResponse.data[ configuration.entityName ];
+
+			// Put the raw entity into our raw entity cache.
+			// We keep the raw copy to allow caching of the raw data.
+			self.__cacheMaintain( self.__entityCacheRaw[ configuration.collectionName || configuration.entityName ],
+				rawEntity,
+				"update",
+				false );
+
 			// Deserialize the object and place it into the cache.
 			// We do not need to check here if the object already exists in the cache.
 			// While it could be possible that the same entity is retrieved multiple times, __updateCacheWithEntity
-			// will not insert duplicated into the cache.
-			var deserialized = self.deserializer( serverResponse.data[ configuration.entityName ] );
+			// will not insert duplicates into the cache.
+			var deserialized = self.deserializer( rawEntity );
 			self.__updateCacheWithEntity( deserialized );
 			return deserialized;
 		}
@@ -421,6 +462,10 @@ function getServiceConstructor( name, configuration ) {
 			self.logInterface.debug( self.logPrefix + "Entity request    '" + id + "' served from request cache." );
 			return self.__requestCache[ id ];
 		}
+
+		// Make sure our raw entity cache exists.
+		self.__entityCacheRaw                                 = self.__entityCacheRaw || {};
+		self.__entityCacheRaw[ configuration.collectionName ] = self.__entityCacheRaw[ configuration.collectionName ] || [];
 
 		var requestUri = configuration.entityUri + ( id ? ( "/" + id ) : "" );
 
@@ -566,10 +611,15 @@ function getServiceConstructor( name, configuration ) {
 			.catch( onEntityDeletionFailed );
 
 		/**
-		 * Invoked when the entity was deleted from the server.
+		 * Invoked when the entity was successfully deleted from the server.
 		 * @param {angular.IHttpPromiseCallbackArg|Object} serverResponse The reply sent from the server.
 		 */
 		function onEntityDeleted( serverResponse ) {
+			self.__cacheMaintain( self.__entityCacheRaw[ configuration.collectionName || configuration.entityName ],
+				entity,
+				"delete",
+				false );
+
 			return self.__removeEntityFromCache( entityId );
 		}
 
@@ -598,84 +648,157 @@ function getServiceConstructor( name, configuration ) {
 		self.logInterface.info( self.logPrefix + "Updating entity '" + ( entityToCache.id || self.name ) + "' in cache…",
 			entityToCache );
 
-		if( !Array.isArray( self.entityCache ) ) {
-			// Allow the user to intervene in the update process, before updating the entity.
-			self.scope.$broadcast( "beforeEntityUpdated",
-				{
-					service : self,
-					cache   : self.entityCache,
-					entity  : self.entityCache,
-					updated : entityToCache
-				} );
+		return self.__cacheMaintain( self.entityCache, entityToCache, "update", true );
+	};
 
-			if( typeof self.entityCache.copyFrom === "function" ) {
-				self.entityCache.copyFrom( entityToCache );
+	/**
+	 * Perform maintenance operations on a cache.
+	 * @param cache The cache to operate on.
+	 * @param entityToCache The entity that the operation is relating to.
+	 * @param {String} operation The operation to perform.
+	 * @param {Boolean} [emit=false] Should appropriate absync events be broadcast to notify other actors?
+	 * @private
+	 */
+	CacheService.prototype.__cacheMaintain = function CacheService$cacheMaintain( cache, entityToCache, operation, emit ) {
+		var self = this;
 
-			} else {
-				angular.extend( self.entityCache, entityToCache );
-			}
+		var entityIndex = 0;
+		var entity      = cache[ entityIndex ];
 
-			// After updating the entity, send another event to allow the user to react.
-			self.scope.$broadcast( "entityUpdated",
-				{
-					service : self,
-					cache   : self.entityCache,
-					entity  : self.entityCache
-				} );
-			return;
+		if( cache.__lookup ) {
+			entityIndex = cache.__lookup[ entityToCache.id ] || cache.length;
 		}
 
-		var found = false;
-		for( var entityIndex = 0, entity = self.entityCache[ 0 ];
-		     entityIndex < self.entityCache.length;
-		     ++entityIndex, entity = self.entityCache[ entityIndex ] ) {
-			if( entity.id == entityToCache.id ) {
-				// Allow the user to intervene in the update process, before updating the entity.
-				self.scope.$broadcast( "beforeEntityUpdated",
-					{
-						service : self,
-						cache   : self.entityCache,
-						entity  : self.entityCache[ entityIndex ],
-						updated : entityToCache
-					} );
+		switch( operation ) {
+			case "update":
+				if( !Array.isArray( cache ) ) {
+					if( emit ) {
+						// Allow the user to intervene in the update process, before updating the entity.
+						self.scope.$broadcast( "beforeEntityUpdated",
+							{
+								service : self,
+								cache   : cache,
+								entity  : cache,
+								updated : entityToCache
+							} );
+					}
 
-				// Use the "copyFrom" method on the entity, if it exists, otherwise use naive approach.
-				var targetEntity = self.entityCache[ entityIndex ];
-				if( typeof targetEntity.copyFrom === "function" ) {
-					targetEntity.copyFrom( entityToCache );
+					if( typeof cache.copyFrom === "function" ) {
+						cache.copyFrom( entityToCache );
 
-				} else {
-					angular.extend( targetEntity, entityToCache );
+					} else {
+						angular.extend( cache, entityToCache );
+					}
+
+					// After updating the entity, send another event to allow the user to react.
+					self.scope.$broadcast( "entityUpdated",
+						{
+							service : self,
+							cache   : cache,
+							entity  : cache
+						} );
+					return;
 				}
 
-				found = true;
+				var found = false;
+				for( angular.noop; entityIndex < cache.length; ++entityIndex, entity = cache[ entityIndex ] ) {
+					if( entity.id === entityToCache.id ) {
+						if( emit ) {
+							// Allow the user to intervene in the update process, before updating the entity.
+							self.scope.$broadcast( "beforeEntityUpdated",
+								{
+									service : self,
+									cache   : cache,
+									entity  : cache[ entityIndex ],
+									updated : entityToCache
+								} );
+						}
 
-				// After updating the entity, send another event to allow the user to react.
-				self.scope.$broadcast( "entityUpdated",
-					{
-						service : self,
-						cache   : self.entityCache,
-						entity  : self.entityCache[ entityIndex ]
-					} );
+						// Use the "copyFrom" method on the entity, if it exists, otherwise use naive approach.
+						var targetEntity = cache[ entityIndex ];
+						if( typeof targetEntity.copyFrom === "function" ) {
+							targetEntity.copyFrom( entityToCache );
+
+						} else {
+							angular.extend( targetEntity, entityToCache );
+						}
+
+						found = true;
+
+						if( emit ) {
+							// After updating the entity, send another event to allow the user to react.
+							self.scope.$broadcast( "entityUpdated",
+								{
+									service : self,
+									cache   : cache,
+									entity  : cache[ entityIndex ]
+								} );
+						}
+						break;
+					}
+				}
+
+				// If the entity wasn't found in our records, it's a new entity.
+				if( !found ) {
+					if( emit ) {
+						self.scope.$broadcast( "beforeEntityNew", {
+							service : self,
+							cache   : cache,
+							entity  : entityToCache
+						} );
+					}
+
+					cache.push( entityToCache );
+					if( cache.__lookup ) {
+						cache.__lookup[ entityToCache.id ] = cache.length - 1;
+					}
+
+					if( emit ) {
+						self.scope.$broadcast( "entityNew", {
+							service : self,
+							cache   : cache,
+							entity  : entityToCache
+						} );
+					}
+				}
 				break;
-			}
-		}
 
-		// If the entity wasn't found in our records, it's a new entity.
-		if( !found ) {
-			self.scope.$broadcast( "beforeEntityNew", {
-				service : self,
-				cache   : self.entityCache,
-				entity  : entityToCache
-			} );
+			case "delete":
+				// The "delete" operation is not expected to happen for single cached entities.
+				for( angular.noop; entityIndex < cache.length; ++entityIndex, entity = cache[ entityIndex ] ) {
+					if( entity.id === entityToCache.id ) {
+						if( emit ) {
+							// Before removing the entity, allow the user to react.
+							self.scope.$broadcast( "beforeEntityRemoved", {
+								service : self,
+								cache   : cache,
+								entity  : entity
+							} );
+						}
 
-			self.entityCache.push( entityToCache );
+						// Remove the entity from the cache.
+						cache.splice( entityIndex, 1 );
 
-			self.scope.$broadcast( "entityNew", {
-				service : self,
-				cache   : self.entityCache,
-				entity  : entityToCache
-			} );
+						if( cache.__lookup ) {
+							for( var cacheEntry in cache.__lookup ) {
+								if( entityIndex <= cache.__lookup[ cacheEntry ] ) {
+									--cache.__lookup[ cacheEntry ];
+								}
+							}
+						}
+
+						if( emit ) {
+							// Send another event to allow the user to take note of the removal.
+							self.scope.$broadcast( "entityRemoved", {
+								service : self,
+								cache   : cache,
+								entity  : entity
+							} );
+						}
+						break;
+					}
+				}
+				break;
 		}
 	};
 
@@ -687,29 +810,9 @@ function getServiceConstructor( name, configuration ) {
 	CacheService.prototype.__removeEntityFromCache = function CacheService$removeEntityFromCache( id ) {
 		var self = this;
 
-		for( var entityIndex = 0, entity = self.entityCache[ 0 ];
-		     entityIndex < self.entityCache.length;
-		     ++entityIndex, entity = self.entityCache[ entityIndex ] ) {
-			if( entity.id == id ) {
-				// Before removing the entity, allow the user to react.
-				self.scope.$broadcast( "beforeEntityRemoved", {
-					service : self,
-					cache   : self.entityCache,
-					entity  : entity
-				} );
-
-				// Remove the entity from the cache.
-				self.entityCache.splice( entityIndex, 1 );
-
-				// Send another event to allow the user to take note of the removal.
-				self.scope.$broadcast( "entityRemoved", {
-					service : self,
-					cache   : self.entityCache,
-					entity  : entity
-				} );
-				break;
-			}
-		}
+		return self.__cacheMaintain( self.entityCache, {
+			id : id
+		}, "delete", true );
 	};
 
 	/**
@@ -720,7 +823,10 @@ function getServiceConstructor( name, configuration ) {
 	CacheService.prototype.lookupTableById = function CacheService$lookupTableById() {
 		var self = this;
 
-		// TODO: Keep a copy of the lookup table and only update it when the cached data updates
+		if( self.entityCache.__lookup ) {
+			return angular.copy( self.entityCache.__lookup );
+		}
+
 		var lookupTable = [];
 		for( var entityIndex = 0;
 		     entityIndex < self.entityCache.length;
@@ -770,12 +876,34 @@ function getServiceConstructor( name, configuration ) {
 	 * @param {String} propertyName The name of the property of entity which should be populated.
 	 * @param {CacheService} cache An instance of another caching service that can provide the complex
 	 * type instances which are being referenced in entity.
-	 * @param {Boolean} [force=false] If true, all complex types will be replaced with references to the
+	 * @param {Object|Boolean} [options] A hash with options relating to the population process.
+	 * @param {Boolean} [options.force=false] If true, all complex types will be replaced with references to the
 	 * instances in cache; otherwise, only properties that are string representations of complex type IDs will be replaced.
+	 * @param {Boolean} [options.crossLink=false] If true, the entity will also be put into a relating property in the
+	 * foreign entity.
+	 * @param {String} [options.crossLinkProperty] The name of the property in the foreign type into which the entity
+	 * should be cross-linked.
 	 * @returns {IPromise<TResult>|IPromise<any[]>|IPromise<{}>|angular.IPromise<TResult>}
 	 */
-	CacheService.prototype.populateComplex = function CacheService$populateComplex( entity, propertyName, cache, force ) {
+	CacheService.prototype.populateComplex = function CacheService$populateComplex( entity, propertyName, cache, options ) {
 		var self = this;
+
+		options = options || {};
+		if( typeof options === "boolean" ) {
+			self.logInterface.warn( "Argument 'force' is deprecated. Provide an options hash instead." );
+			options = {
+				force : options
+			};
+		}
+		options.force             = options.force || false;
+		options.crossLink         = options.crossLink || false;
+		options.crossLinkProperty = options.crossLinkProperty || "";
+
+		if( options.crossLink && !options.crossLinkProperty ) {
+			self.logInterface.warn(
+				"Option 'crossLink' given without 'crossLinkProperty'. Cross-linking will be disabled." );
+			options.crossLink = false;
+		}
 
 		// If the target property is an array, ...
 		if( Array.isArray( entity[ propertyName ] ) ) {
@@ -788,11 +916,14 @@ function getServiceConstructor( name, configuration ) {
 			// We usually assume the properties to be strings (the ID of the referenced complex).
 			if( typeof entity[ propertyName ] !== "string" ) {
 				// If "force" is enabled, we check if this non-string property is an object and has an "id" member, which is a string.
-				if( force && typeof entity[ propertyName ] === "object" && typeof entity[ propertyName ].id === "string" ) {
+				if( options.force && typeof entity[ propertyName ] === "object" && typeof entity[ propertyName ].id === "string" ) {
 					// If that is true, then we replace the whole object with the ID and continue as usual.
 					entity[ propertyName ] = entity[ propertyName ].id;
 
 				} else {
+					if( self.throwFailures ) {
+						throw new Error( "The referenced entity did not have an 'id' property that would be expected." );
+					}
 					return self.q.when( false );
 				}
 			}
@@ -806,11 +937,15 @@ function getServiceConstructor( name, configuration ) {
 			// We usually assume the properties to be strings (the ID of the referenced complex).
 			if( typeof entity[ propertyName ][ index ] !== "string" ) {
 				// If "force" is enabled, we check if this non-string property is an object and has an "id" member, which is a string.
-				if( force && typeof entity[ propertyName ][ index ] === "object" && typeof entity[ propertyName ][ index ].id === "string" ) {
+				if( options.force && typeof entity[ propertyName ][ index ] === "object" && typeof entity[ propertyName ][ index ].id === "string" ) {
 					// If that is true, then we replace the whole object with the ID and continue as usual.
 					entity[ propertyName ][ index ] = entity[ propertyName ][ index ].id;
 
 				} else {
+					if( self.throwFailures ) {
+						throw new Error( "The referenced entity did not have an 'id' property that would be expected." );
+					}
+
 					return self.q.when( false );
 				}
 			}
@@ -822,6 +957,11 @@ function getServiceConstructor( name, configuration ) {
 			function onComplexRetrieved( complex ) {
 				// When the complex was retrieved, store it back into the array.
 				entity[ propertyName ][ index ] = complex;
+
+				if( options.crossLink ) {
+					crossLink( complex, entity );
+				}
+
 				return entity;
 			}
 		}
@@ -829,6 +969,37 @@ function getServiceConstructor( name, configuration ) {
 		function onComplexRetrieved( complex ) {
 			// When the complex was retrieved, store it back into the entity.
 			entity[ propertyName ] = complex;
+
+			if( options.crossLink ) {
+				crossLink( complex, entity );
+			}
+
+			return entity;
+		}
+
+		function crossLink( complex, entity ) {
+			// If cross-linking is enabled, put our entity into the foreign complex.
+			if( Array.isArray( complex[ options.crossLinkProperty ] ) ) {
+				// Check if the entity is already linked into the array.
+				var entityIndex = complex[ options.crossLinkProperty ].indexOf( entity );
+				if( -1 < entityIndex ) {
+					return;
+				}
+
+				// Check if the ID exists in the array.
+				var idIndex = complex[ options.crossLinkProperty ].indexOf( entity.id );
+				if( -1 < idIndex ) {
+					// Replace the ID with the entity.
+					complex[ options.crossLinkProperty ][ idIndex ] = entity;
+					return;
+				}
+
+				// Just push the element into the array.
+				complex[ options.crossLinkProperty ].push( entity );
+				return;
+			}
+
+			complex[ options.crossLinkProperty ] = entity;
 		}
 	};
 
@@ -840,7 +1011,9 @@ function getServiceConstructor( name, configuration ) {
 	CacheService.prototype.reset = function CacheService$reset() {
 		var self = this;
 
-		self.entityCache      = self.configuration.collectionName ? [] : {};
+		self.entityCache          = self.configuration.collectionName ? [] : {};
+		self.entityCache.__lookup = self.entityCache.__lookup || {};
+
 		self.__entityCacheRaw = null;
 		self.__requestCache   = {};
 	};
