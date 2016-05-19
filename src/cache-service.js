@@ -384,12 +384,14 @@ function getServiceConstructor( name, configuration ) {
 		self.logInterface.debug( self.logPrefix + "Requesting entity '" + id + "' (forceReload:" + forceReload + ")…" );
 
 		if( !forceReload ) {
+			var entityIndex = 0;
+
 			// Check if the entity is in the cache and return instantly if found.
 			if( self.entityCache.__lookup ) {
 				entityIndex = self.entityCache.__lookup[ id ] || self.entityCache.length;
 			}
 
-			for( var entityIndex = 0, entity = self.entityCache[ 0 ];
+			for( var entity = self.entityCache[ 0 ];
 			     entityIndex < self.entityCache.length;
 			     ++entityIndex, entity = self.entityCache[ entityIndex ] ) {
 				if( entity.id === id ) {
