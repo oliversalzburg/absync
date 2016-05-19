@@ -1147,10 +1147,6 @@ function getServiceConstructor( name, configuration ) {
 	CacheService.prototype.lookupTableById = function CacheService$lookupTableById() {
 		var self = this;
 
-		if( self.entityCache.__lookup ) {
-			return angular.copy( self.entityCache.__lookup );
-		}
-
 		var lookupTable = [];
 		for( var entityIndex = 0;
 		     entityIndex < self.entityCache.length;
