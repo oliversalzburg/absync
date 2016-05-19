@@ -188,6 +188,16 @@ function getServiceConstructor( name, configuration ) {
 		var self            = this;
 		var _entityReceived = args;
 
+		// Check if our raw entity cache was even initialized.
+		// It's possible that it isn't, because websocket updates can be received before any manual requests
+		// were made to the backend.
+		if( !self.__entityCacheRaw || !self.__entityCacheRaw[ configuration.collectionName || configuration.entityName ] ) {
+			// We ignore this update and just stack a new read request on top of any existing ones.
+			// This makes sure that we load the freshest entity in an orderly fashion and lose the state we received
+			// here, as we're getting the latest version of the entity.
+			return self.read( _entityReceived.id );
+		}
+
 		// Determine if the received record consists ONLY of an id property,
 		// which would mean that this record was deleted from the backend.
 		if( 1 === Object.keys( _entityReceived ).length && _entityReceived.hasOwnProperty( "id" ) ) {
@@ -827,12 +837,34 @@ function getServiceConstructor( name, configuration ) {
 	 * @param {String} propertyName The name of the property of entity which should be populated.
 	 * @param {CacheService} cache An instance of another caching service that can provide the complex
 	 * type instances which are being referenced in entity.
-	 * @param {Boolean} [force=false] If true, all complex types will be replaced with references to the
+	 * @param {Object|Boolean} [options] A hash with options relating to the population process.
+	 * @param {Boolean} [options.force=false] If true, all complex types will be replaced with references to the
 	 * instances in cache; otherwise, only properties that are string representations of complex type IDs will be replaced.
+	 * @param {Boolean} [options.crossLink=false] If true, the entity will also be put into a relating property in the
+	 * foreign entity.
+	 * @param {String} [options.crossLinkProperty] The name of the property in the foreign type into which the entity
+	 * should be cross-linked.
 	 * @returns {IPromise<TResult>|IPromise<any[]>|IPromise<{}>|angular.IPromise<TResult>}
 	 */
-	CacheService.prototype.populateComplex = function CacheService$populateComplex( entity, propertyName, cache, force ) {
+	CacheService.prototype.populateComplex = function CacheService$populateComplex( entity, propertyName, cache, options ) {
 		var self = this;
+
+		options = options || {};
+		if( typeof options === "boolean" ) {
+			self.logInterface.warn( "Argument 'force' is deprecated. Provide an options hash instead." );
+			options = {
+				force : options
+			};
+		}
+		options.force             = options.force || false;
+		options.crossLink         = options.crossLink || false;
+		options.crossLinkProperty = options.crossLinkProperty || "";
+
+		if( options.crossLink && !options.crossLinkProperty ) {
+			self.logInterface.warn(
+				"Option 'crossLink' given without 'crossLinkProperty'. Cross-linking will be disabled." );
+			options.crossLink = false;
+		}
 
 		// If the target property is an array, ...
 		if( Array.isArray( entity[ propertyName ] ) ) {
@@ -845,11 +877,14 @@ function getServiceConstructor( name, configuration ) {
 			// We usually assume the properties to be strings (the ID of the referenced complex).
 			if( typeof entity[ propertyName ] !== "string" ) {
 				// If "force" is enabled, we check if this non-string property is an object and has an "id" member, which is a string.
-				if( force && typeof entity[ propertyName ] === "object" && typeof entity[ propertyName ].id === "string" ) {
+				if( options.force && typeof entity[ propertyName ] === "object" && typeof entity[ propertyName ].id === "string" ) {
 					// If that is true, then we replace the whole object with the ID and continue as usual.
 					entity[ propertyName ] = entity[ propertyName ].id;
 
 				} else {
+					if( self.throwFailures ) {
+						throw new Error( "The referenced entity did not have an 'id' property that would be expected." );
+					}
 					return self.q.when( false );
 				}
 			}
@@ -863,11 +898,15 @@ function getServiceConstructor( name, configuration ) {
 			// We usually assume the properties to be strings (the ID of the referenced complex).
 			if( typeof entity[ propertyName ][ index ] !== "string" ) {
 				// If "force" is enabled, we check if this non-string property is an object and has an "id" member, which is a string.
-				if( force && typeof entity[ propertyName ][ index ] === "object" && typeof entity[ propertyName ][ index ].id === "string" ) {
+				if( options.force && typeof entity[ propertyName ][ index ] === "object" && typeof entity[ propertyName ][ index ].id === "string" ) {
 					// If that is true, then we replace the whole object with the ID and continue as usual.
 					entity[ propertyName ][ index ] = entity[ propertyName ][ index ].id;
 
 				} else {
+					if( self.throwFailures ) {
+						throw new Error( "The referenced entity did not have an 'id' property that would be expected." );
+					}
+
 					return self.q.when( false );
 				}
 			}
@@ -879,6 +918,11 @@ function getServiceConstructor( name, configuration ) {
 			function onComplexRetrieved( complex ) {
 				// When the complex was retrieved, store it back into the array.
 				entity[ propertyName ][ index ] = complex;
+
+				if( options.crossLink ) {
+					crossLink( complex, entity );
+				}
+
 				return entity;
 			}
 		}
@@ -886,6 +930,37 @@ function getServiceConstructor( name, configuration ) {
 		function onComplexRetrieved( complex ) {
 			// When the complex was retrieved, store it back into the entity.
 			entity[ propertyName ] = complex;
+
+			if( options.crossLink ) {
+				crossLink( complex, entity );
+			}
+
+			return entity;
+		}
+
+		function crossLink( complex, entity ) {
+			// If cross-linking is enabled, put our entity into the foreign complex.
+			if( Array.isArray( complex[ options.crossLinkProperty ] ) ) {
+				// Check if the entity is already linked into the array.
+				var entityIndex = complex[ options.crossLinkProperty ].indexOf( entity );
+				if( -1 < entityIndex ) {
+					return;
+				}
+
+				// Check if the ID exists in the array.
+				var idIndex = complex[ options.crossLinkProperty ].indexOf( entity.id );
+				if( -1 < idIndex ) {
+					// Replace the ID with the entity.
+					complex[ options.crossLinkProperty ][ idIndex ] = entity;
+					return;
+				}
+
+				// Just push the element into the array.
+				complex[ options.crossLinkProperty ].push( entity );
+				return;
+			}
+
+			complex[ options.crossLinkProperty ] = entity;
 		}
 	};
 

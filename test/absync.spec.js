@@ -4,7 +4,9 @@
 describe( "absync", function() {
 	var $httpBackend;
 	var $rootScope;
+
 	var devices;
+	var users;
 
 	beforeEach( function() {
 		angular
@@ -22,7 +24,25 @@ describe( "absync", function() {
 				_absyncProvider_.configure( SockMock );
 				_absyncProvider_.collection( "devices", serviceDefinition );
 			} )
+			.config( function( _absyncProvider_ ) {
+				var serviceDefinition = {
+					model          : "User",
+					collectionName : "users",
+					collectionUri  : "/api/users",
+					entityName     : "user",
+					entityUri      : "/api/user",
+					debug          : true
+				};
+
+				_absyncProvider_.configure( SockMock );
+				_absyncProvider_.collection( "users", serviceDefinition );
+			} )
 			.constant( "Device", {
+				deserialize : function( data ) {
+					return angular.copy( data );
+				}
+			} )
+			.constant( "User", {
 				deserialize : function( data ) {
 					return angular.copy( data );
 				}
@@ -31,6 +51,7 @@ describe( "absync", function() {
 		module( "absync", "test" );
 	} );
 
+	// Set up the devices API
 	beforeEach( inject( function( _$httpBackend_, _$rootScope_ ) {
 		$httpBackend = _$httpBackend_;
 		$rootScope   = _$rootScope_;
@@ -39,8 +60,9 @@ describe( "absync", function() {
 			.when( "GET", "/api/devices" )
 			.respond( {
 				devices : [ {
-					id   : 1,
-					name : "My Device"
+					id    : "1",
+					name  : "My Device",
+					owner : "1"
 				} ]
 			} );
 
@@ -48,17 +70,20 @@ describe( "absync", function() {
 			.when( "GET", "/api/device/1" )
 			.respond( {
 				device : {
-					id   : 1,
-					name : "My Device"
+					id    : "1",
+					name  : "My Device",
+					owner : "1"
 				}
 			} );
 
+		// This device is not served with the collection GET.
 		$httpBackend
 			.when( "GET", "/api/device/2" )
 			.respond( {
 				device : {
-					id   : 2,
-					name : "Another Device"
+					id    : "2",
+					name  : "Another Device",
+					owner : "2"
 				}
 			} );
 
@@ -67,9 +92,46 @@ describe( "absync", function() {
 			.respond( 200 );
 	} ) );
 
-	beforeEach( inject( function( _devices_ ) {
+	// Set up the users API
+	beforeEach( inject( function( _$httpBackend_, _$rootScope_ ) {
+		$httpBackend = _$httpBackend_;
+		$rootScope   = _$rootScope_;
+
+		$httpBackend
+			.when( "GET", "/api/users" )
+			.respond( {
+				users : [ {
+					id   : "1",
+					name : "John Doe"
+				} ]
+			} );
+
+		$httpBackend
+			.when( "GET", "/api/user/1" )
+			.respond( {
+				user : {
+					id   : "1",
+					name : "John Doe"
+				}
+			} );
+
+		// This user is not served with the collection GET.
+		$httpBackend
+			.when( "GET", "/api/user/2" )
+			.respond( {
+				user : {
+					id   : "2",
+					name : "Jane Smith"
+				}
+			} );
+	} ) );
+
+	beforeEach( inject( function( _devices_, _users_ ) {
 		devices = _devices_;
 		devices.reset();
+
+		users = _users_;
+		users.reset();
 	} ) );
 
 	it( "should construct a caching service", function() {
@@ -130,7 +192,7 @@ describe( "absync", function() {
 			expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
 
 			devices.delete( {
-					id : 1
+					id : "1"
 				} )
 				.then( function() {
 					expect( devices.__entityCacheRaw.devices ).to.be.an( "array" ).with.length( 0 );
@@ -149,8 +211,9 @@ describe( "absync", function() {
 			expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
 
 			var updated = {
-				id   : 1,
-				name : "My Updated Device"
+				id    : "1",
+				name  : "My Updated Device",
+				owner : "1"
 			};
 
 			devices.__onEntityReceived( null, updated );
@@ -169,7 +232,7 @@ describe( "absync", function() {
 			expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
 
 			var deleted = {
-				id : 1
+				id : "1"
 			};
 
 			devices.__onEntityReceived( null, deleted );
@@ -183,7 +246,7 @@ describe( "absync", function() {
 		it( "should provide an entity", function( done ) {
 			devices.ensureLoaded();
 			$httpBackend.flush();
-			devices.read( 1 )
+			devices.read( "1" )
 				.then( function( device ) {
 					expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
 					expect( device ).to.be.an( "object" ).with.property( "name" ).that.equals( "My Device" );
@@ -209,13 +272,13 @@ describe( "absync", function() {
 		it( "should provide seeded content", function( done ) {
 			devices.seed( {
 					devices : [ {
-						id   : 1,
+						id   : "1",
 						name : "My Device"
 					} ]
 				}
 			);
 
-			devices.read( 1 )
+			devices.read( "1" )
 				.then( function( device ) {
 					expect( device ).to.be.an( "object" ).with.property( "name" ).that.equals( "My Device" );
 				} )
@@ -227,7 +290,7 @@ describe( "absync", function() {
 		it( "should provide updated content when syncing after seeding", function( done ) {
 			var seed = {
 				devices : [ {
-					id   : 1,
+					id   : "1",
 					name : "My Device"
 				} ]
 			};
@@ -237,13 +300,51 @@ describe( "absync", function() {
 			devices.sync();
 			$httpBackend.flush();
 
-			devices.read( 1 )
+			devices.read( "1" )
 				.then( function( device ) {
 					expect( device ).to.not.equal( seed.devices[ 0 ] );
 				} )
 				.then( done )
 				.catch( done );
 			$rootScope.$digest();
+		} );
+	} );
+
+	describe( "populate complex", function() {
+		it( "should populate referenced complex types", function( done ) {
+			devices.read( "1" );
+			$httpBackend.flush();
+
+			devices.populateComplex( devices.entityCache[ 0 ], "owner", users )
+				.then( function() {
+					devices.entityCache[ 0 ].owner.should.equal( users.entityCache[ 0 ] );
+				} )
+				.then( done )
+				.catch( done );
+
+			$httpBackend.flush();
+		} );
+
+		it( "should populate referenced complex types and cross-link", function( done ) {
+			users.ensureLoaded();
+			devices.read( "1" );
+			$httpBackend.flush();
+
+			users.entityCache[ 0 ].devices = [];
+
+			devices.populateComplex( devices.entityCache[ 0 ], "owner", users, {
+					crossLink         : true,
+					crossLinkProperty : "devices"
+				} )
+				.then( function() {
+					devices.entityCache[ 0 ].owner.should.equal( users.entityCache[ 0 ] );
+					users.entityCache[ 0 ].devices.should.be.an( "array" ).with.length( 1 );
+					users.entityCache[ 0 ].devices[ 0 ].should.equal( devices.entityCache[ 0 ] );
+				} )
+				.then( done )
+				.catch( done );
+
+			$httpBackend.flush();
 		} );
 	} );
 } );

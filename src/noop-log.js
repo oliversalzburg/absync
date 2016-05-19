@@ -5,5 +5,6 @@ angular
 	.constant( "absyncNoopLog", {
 		debug : angular.noop,
 		info  : angular.noop,
+		warn  : angular.noop,
 		error : angular.noop
 	} );
