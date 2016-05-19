@@ -703,10 +703,10 @@ function getServiceConstructor( name, configuration ) {
 
 			// Check if the entity is in the cache and return instantly if found.
 			if( self.entityCache.__lookup ) {
-				entityIndex = self.entityCache.__lookup[ id ] || self.entityCache.length;
+				entityIndex = self.entityCache.__lookup.hasOwnProperty( id ) ? self.entityCache.__lookup[ id ] : self.entityCache.length;
 			}
 
-			for( var entity = self.entityCache[ 0 ];
+			for( var entity = self.entityCache[ entityIndex ];
 			     entityIndex < self.entityCache.length;
 			     ++entityIndex, entity = self.entityCache[ entityIndex ] ) {
 				if( entity.id === id ) {
@@ -980,7 +980,7 @@ function getServiceConstructor( name, configuration ) {
 		var entity      = cache[ entityIndex ];
 
 		if( cache.__lookup ) {
-			entityIndex = cache.__lookup[ entityToCache.id ] || cache.length;
+			entityIndex = cache.__lookup.hasOwnProperty( entityToCache.id ) ? cache.__lookup[ entityToCache.id ] : cache.length;
 		}
 
 		switch( operation ) {
