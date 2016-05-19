@@ -204,7 +204,10 @@ function getServiceConstructor( name, configuration ) {
 			// We ignore this update and just stack a new read request on top of any existing ones.
 			// This makes sure that we load the freshest entity in an orderly fashion and lose the state we received
 			// here, as we're getting the latest version of the entity.
-			return self.read( _entityReceived.id );
+			return self.ensureLoaded()
+				.then( function updateEntity() {
+					return self.read( _entityReceived.id );
+				} );
 		}
 
 		// Determine if the received record consists ONLY of an id property,
@@ -387,12 +390,14 @@ function getServiceConstructor( name, configuration ) {
 		self.logInterface.debug( self.logPrefix + "Requesting entity '" + id + "' (forceReload:" + forceReload + ")…" );
 
 		if( !forceReload ) {
+			var entityIndex = 0;
+
 			// Check if the entity is in the cache and return instantly if found.
 			if( self.entityCache.__lookup ) {
 				entityIndex = self.entityCache.__lookup[ id ] || self.entityCache.length;
 			}
 
-			for( var entityIndex = 0, entity = self.entityCache[ 0 ];
+			for( var entity = self.entityCache[ 0 ];
 			     entityIndex < self.entityCache.length;
 			     ++entityIndex, entity = self.entityCache[ entityIndex ] ) {
 				if( entity.id === id ) {
