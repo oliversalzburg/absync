@@ -347,6 +347,15 @@ describe( "absync", function() {
 			$httpBackend.flush();
 		} );
 	} );
+
+	describe( "lookup table", function() {
+		it( "should provide an ID to entity lookup", function() {
+			devices.ensureLoaded();
+			$httpBackend.flush();
+			var table = devices.lookupTableById();
+			table[ "1" ].should.equal( devices.entityCache[ 0 ] );
+		} );
+	} );
 } );
 
 /**
