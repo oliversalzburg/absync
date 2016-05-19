@@ -990,6 +990,7 @@ function getServiceConstructor( name, configuration ) {
 
 		if( cache.__lookup ) {
 			entityIndex = cache.__lookup.hasOwnProperty( entityToCache.id ) ? cache.__lookup[ entityToCache.id ] : cache.length;
+			entity      = cache[ entityIndex ];
 		}
 
 		switch( operation ) {
