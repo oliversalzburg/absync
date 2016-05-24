@@ -107,6 +107,9 @@ function getServiceConstructor( name, configuration ) {
 		self.serializer   = serializeModel;
 		self.deserializer = deserializeModel;
 
+		// Store a reference to the optional filter function.
+		self.filter = configuration.filter;
+
 		// Tell absync to register an event listener for both our entity and its collection.
 		// When we receive these events, we broadcast an equal Angular event on the root scope.
 		// This way the user can already peek at the data (manipulating it is discouraged though).
@@ -675,6 +678,14 @@ function getServiceConstructor( name, configuration ) {
 
 		var entityIndex = 0;
 		var entity      = cache[ entityIndex ];
+
+		if( self.filter ) {
+			if( !self.filter( entityToCache ) ) {
+				self.logInterface.info( self.logPrefix + "Entity '" + ( entityToCache.id || self.name ) + "' was filtered.",
+					entityToCache );
+				return;
+			}
+		}
 
 		if( cache.__lookup ) {
 			entityIndex = cache.__lookup.hasOwnProperty( entityToCache.id ) ? cache.__lookup[ entityToCache.id ] : cache.length;
