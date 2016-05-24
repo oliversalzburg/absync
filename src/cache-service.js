@@ -38,7 +38,7 @@ function getServiceConstructor( name, configuration ) {
 	 * @returns {CacheService}
 	 * @ngInject
 	 */
-	function CacheService( $http, $injector, $log, $q, $rootScope, absyncNoopLog, absync, absyncUncachedFilter ) {
+	function CacheService( $http, $injector, $log, $q, $rootScope, absync, absyncNoopLog, absyncUncachedFilter ) {
 		var self = this;
 
 		// Retrieve a reference to the model of the collection that is being cached.
