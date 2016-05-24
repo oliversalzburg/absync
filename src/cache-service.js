@@ -38,7 +38,7 @@ function getServiceConstructor( name, configuration ) {
 	 * @returns {CacheService}
 	 * @ngInject
 	 */
-	function CacheService( $http, $injector, $log, $q, $rootScope, absyncNoopLog, absync, absyncUncachedFilter ) {
+	function CacheService( $http, $injector, $log, $q, $rootScope, absync, absyncNoopLog, absyncUncachedFilter ) {
 		var self = this;
 
 		// Retrieve a reference to the model of the collection that is being cached.
@@ -106,6 +106,9 @@ function getServiceConstructor( name, configuration ) {
 		// Expose the serializer/deserializer so that they can be adjusted at any time.
 		self.serializer   = serializeModel;
 		self.deserializer = deserializeModel;
+
+		// Store a reference to the optional filter function.
+		self.filter = configuration.filter;
 
 		// Tell absync to register an event listener for both our entity and its collection.
 		// When we receive these events, we broadcast an equal Angular event on the root scope.
@@ -675,6 +678,14 @@ function getServiceConstructor( name, configuration ) {
 
 		var entityIndex = 0;
 		var entity      = cache[ entityIndex ];
+
+		if( self.filter ) {
+			if( !self.filter( entityToCache ) ) {
+				self.logInterface.info( self.logPrefix + "Entity '" + ( entityToCache.id || self.name ) + "' was filtered.",
+					entityToCache );
+				return;
+			}
+		}
 
 		if( cache.__lookup ) {
 			entityIndex = cache.__lookup.hasOwnProperty( entityToCache.id ) ? cache.__lookup[ entityToCache.id ] : cache.length;
