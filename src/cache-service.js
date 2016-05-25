@@ -999,18 +999,28 @@ function getServiceConstructor( name, configuration ) {
 		function crossLink( complex, entity ) {
 			// If cross-linking is enabled, put our entity into the foreign complex.
 			if( Array.isArray( complex[ options.crossLinkProperty ] ) ) {
-				// Check if the entity is already linked into the array.
-				var entityIndex = complex[ options.crossLinkProperty ].indexOf( entity );
-				if( -1 < entityIndex ) {
-					return;
-				}
-
 				// Check if the ID exists in the array.
 				var idIndex = complex[ options.crossLinkProperty ].indexOf( entity.id );
 				if( -1 < idIndex ) {
 					// Replace the ID with the entity.
 					complex[ options.crossLinkProperty ][ idIndex ] = entity;
 					return;
+				}
+
+				// Check if the entity is already linked into the array.
+				for( var lookupIndex = 0, lookupEntity = complex[ options.crossLinkProperty ][ 0 ];
+				     lookupIndex < complex[ options.crossLinkProperty ].length;
+				     ++lookupIndex, lookupEntity = complex[ options.crossLinkProperty ][ lookupIndex ] ) {
+					// Check if the exact same reference is already within the array.
+					if( lookupEntity === entity ) {
+						return;
+					}
+
+					// Check if another element with the same ID already exists in the array.
+					if( lookupEntity.id === entity.id ) {
+						complex[ options.crossLinkProperty ][ lookupIndex ] = entity;
+						return;
+					}
 				}
 
 				// Just push the element into the array.
