@@ -1115,6 +1115,8 @@ function getServiceConstructor( name, configuration ) {
 						cache.splice( entityIndex, 1 );
 
 						if( cache.__lookup ) {
+							delete cache.__lookup[ entityToCache.id ];
+
 							for( var cacheEntry in cache.__lookup ) {
 								if( entityIndex <= cache.__lookup[ cacheEntry ] ) {
 									--cache.__lookup[ cacheEntry ];
