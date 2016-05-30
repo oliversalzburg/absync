@@ -846,8 +846,10 @@ function getServiceConstructor( name, configuration ) {
 		}
 	};
 
-	CacheService.prototype.patch = function CacheService$patch( entity ) {
+	CacheService.prototype.patch = function CacheService$patch( entity, returnResult ) {
 		var self = this;
+
+		returnResult = returnResult || false;
 
 		// First create a copy of the object, which has complex properties reduced to their respective IDs.
 		var reduced    = self.reduceComplex( entity );
@@ -862,7 +864,7 @@ function getServiceConstructor( name, configuration ) {
 		if( "undefined" !== typeof entity.id ) {
 			return self.httpInterface
 				.patch( configuration.entityUri + "/" + entity.id, wrappedEntity )
-				.then( afterEntityStored.bind( self ), onEntityStorageFailure.bind( self ) );
+				.then( afterEntityStored.bind( self, returnResult ), onEntityStorageFailure.bind( self ) );
 
 		} else {
 			throw new Error( "Attempted to patch an entity that was never stored on the server." );
