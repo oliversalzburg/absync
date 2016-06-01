@@ -1,4 +1,6 @@
-.idea
-node_modules
-public
+.idea/
+bower_components/
+coverage/
+node_modules/
+typings/
 bower.json
