@@ -389,6 +389,17 @@ function getServiceConstructor( name, configuration ) {
 	};
 
 	/**
+	 * Check if the given element with the given ID is in the cache.
+	 * @param {String} id
+	 * @return {Boolean} true if the element is in the cache; false otherwise.
+	 */
+	CacheService.prototype.has = function CacheService$has( id ) {
+		var self = this;
+
+		return self.entityCache.__lookup.hasOwnProperty( id );
+	};
+
+	/**
 	 * Read a single entity from the cache, or load it from the server if required.
 	 * The entity will be placed into the cache.
 	 * @param {String} id The ID of the entity to retrieve.
