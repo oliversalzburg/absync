@@ -257,7 +257,7 @@ describe( "absync", function() {
 		} );
 
 		it( "should provide an entity when collection is not loaded", function( done ) {
-			devices.read( 1 )
+			devices.read( "1" )
 				.then( function( device ) {
 					expect( devices.entityCache ).to.be.an( "array" ).with.length( 1 );
 					expect( device ).to.be.an( "object" ).with.property( "name" ).that.equals( "My Device" );
@@ -265,6 +265,13 @@ describe( "absync", function() {
 				.then( done )
 				.catch( done );
 			$httpBackend.flush();
+		} );
+
+		it( "should know which elements are in the index", function() {
+			devices.ensureLoaded();
+			$httpBackend.flush();
+			expect( devices.has( "1" ) ).to.be.true;
+			expect( devices.has( "nope" ) ).to.be.false;
 		} );
 	} );
 
