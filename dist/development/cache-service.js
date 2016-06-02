@@ -379,12 +379,42 @@ function getServiceConstructor( name, configuration ) {
 		return self.__onDataAvailable( self.__entityCacheRaw );
 	};
 
+	/**
+	 * Insert a phantom into the cache, if no real entity with the same ID exists yet.
+	 * Phantoms bypass the raw entity cache.
+	 * @param {Object} entity
+	 */
+	CacheService.prototype.phantom = function CacheService$phantom( entity ) {
+		var self = this;
+
+		if( self.has( entity.id ) ) {
+			return;
+		}
+
+		return self.__onEntityReceived( null, entity );
+	};
+
+	/**
+	 * Drop existing cache and force reload.
+	 * @returns {Promise.<Array.<configuration.model>>|IPromise.<Array>|IPromise.<void>|Q.Promise.<Array.<configuration.model>>|angular.IPromise.<TResult>}
+	 */
 	CacheService.prototype.sync = function CacheService$sync() {
 		var self = this;
 
 		self.__entityCacheRaw = null;
 
 		return self.ensureLoaded( true );
+	};
+
+	/**
+	 * Check if the given element with the given ID is in the cache.
+	 * @param {String} id
+	 * @return {Boolean} true if the element is in the cache; false otherwise.
+	 */
+	CacheService.prototype.has = function CacheService$has( id ) {
+		var self = this;
+
+		return self.entityCache.__lookup.hasOwnProperty( id );
 	};
 
 	/**
