@@ -376,6 +376,10 @@ function getServiceConstructor( name, configuration ) {
 		return self.__onDataAvailable( self.__entityCacheRaw );
 	};
 
+	/**
+	 * Drop existing cache and force reload.
+	 * @returns {Promise.<Array.<configuration.model>>|IPromise.<Array>|IPromise.<void>|Q.Promise.<Array.<configuration.model>>|angular.IPromise.<TResult>}
+	 */
 	CacheService.prototype.sync = function CacheService$sync() {
 		var self = this;
 
