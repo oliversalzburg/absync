@@ -3,4 +3,8 @@ bower_components/
 coverage/
 node_modules/
 typings/
+.*
 bower.json
+gulp.config.js
+gulpfile.js
+tsd.json
