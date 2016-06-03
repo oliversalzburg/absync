@@ -5,8 +5,7 @@
   "main": "dist/development/absync.concat.js",
   "scripts": {
     "test": "./node_modules/.bin/karma start --single-run --browsers PhantomJS",
-    "test-all": "./node_modules/.bin/karma start --single-run",
-    "postinstall": "./node_modules/.bin/bower install"
+    "test-all": "./node_modules/.bin/karma start --single-run"
   },
   "repository": {
     "type": "git",
