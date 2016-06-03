@@ -4,6 +4,7 @@
   "description": "absync",
   "main": "dist/development/absync.concat.js",
   "scripts": {
+    "pretest": "./node_modules/.bin/bower install",
     "test": "./node_modules/.bin/karma start --single-run --browsers PhantomJS",
     "test-all": "./node_modules/.bin/karma start --single-run"
   },
