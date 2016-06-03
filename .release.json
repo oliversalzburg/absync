@@ -1,10 +1,21 @@
 {
-	"all": {
+	"before": {
 		"tasks": [
 			{
 				"name": "Building dist files",
 				"command": "gulp",
 				"comment": "[TASK] Rebuilt dist files"
+			}
+		]
+	},
+	"after": {
+		"tasks": [
+			{
+				"name": "Bump Dependants",
+				"command": "bumpdep",
+				"args": [
+					"^"
+				]
 			}
 		]
 	},

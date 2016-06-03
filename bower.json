@@ -8,13 +8,16 @@
   "license": "MIT",
   "ignore": [
     "**/.*",
-    "node_modules",
-    "bower_components",
-    "public/lib",
-    "index.js",
-    "lib",
-    "test",
-    "tests"
+    "bower_components/",
+    "lib/",
+    "node_modules/",
+    "public/lib/",
+    "test/",
+    ".*",
+    "gulp.config.js",
+    "gulpfile.js",
+    "package.json",
+    "tsd.json"
   ],
   "devDependencies": {
     "angular-1.2.29": "angular#1.2.29",
@@ -29,5 +32,5 @@
   "resolutions": {
     "angular": "1.5.5"
   },
-  "version": "3.6.0"
+  "version": "3.7.0"
 }
