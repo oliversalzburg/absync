@@ -509,6 +509,22 @@ function getServiceConstructor( name, configuration ) {
 		var self            = this;
 		var _entityReceived = args;
 
+		// Sometimes you don't want to use an entity cache, and only listen to websocket events.
+		// In this case you don't configure an entityUri and entityUri, so received entities will be emitted directly.
+		if( configuration.collectionUri === null && configuration.entityUri === null ) {
+
+			var directResponse = {
+				service : self,
+				cache   : self.entityCache,
+				entity  : _entityReceived
+			};
+
+			self.scope.$broadcast( "beforeEntityNew", directResponse );
+			self.scope.$broadcast( "entityNew", directResponse );
+
+			return Promise.resolve();
+		}
+
 		// Check if our raw entity cache was even initialized.
 		// It's possible that it isn't, because websocket updates can be received before any manual requests
 		// were made to the backend.
