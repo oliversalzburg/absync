@@ -191,6 +191,7 @@ function getServiceConstructor( name, configuration ) {
 	 * Event handler for when an entity is received on the root scope.
 	 * @param {Object} event The event object.
 	 * @param {Object} args The raw object as it was read from the wire.
+	 * @return {Promise|undefined}
 	 * @private
 	 */
 	CacheService.prototype.__onEntityReceived = function CacheService$onEntityReceived( event, args ) {
@@ -210,7 +211,8 @@ function getServiceConstructor( name, configuration ) {
 			self.scope.$broadcast( "beforeEntityNew", directResponse );
 			self.scope.$broadcast( "entityNew", directResponse );
 
-			return Promise.resolve();
+			//noinspection JSValidateTypes
+			return self.q.when();
 		}
 
 		// Check if our raw entity cache was even initialized.
@@ -396,15 +398,57 @@ function getServiceConstructor( name, configuration ) {
 	 * Insert a phantom into the cache, if no real entity with the same ID exists yet.
 	 * Phantoms bypass the raw entity cache.
 	 * @param {Object} entity
+	 * @param {Number} [timeout] How long to wait for the phantom to be replaced.
+	 * If no timeout is defined, the replacement of the phantom is ignored.
+	 * To wait forever for the phantom to be replaced, set `timeout` to Number.POSITIVE_INFINITY or `null`.
+	 * @return {Promise<Object>} Resolved when the phantom is replaced by the actual entity; rejected after the timeout.
 	 */
-	CacheService.prototype.phantom = function CacheService$phantom( entity ) {
+	CacheService.prototype.phantom = function CacheService$phantom( entity, timeout ) {
 		var self = this;
 
 		if( self.has( entity.id ) ) {
-			return;
+			return self.read( entity.id );
 		}
 
-		return self.__onEntityReceived( null, entity );
+		timeout = timeout === null ? Number.POSITIVE_INFINITY : timeout;
+		timeout = typeof timeout === "undefined" ? null : timeout;
+
+		//noinspection JSValidateTypes
+		return self.q.when( self.__onEntityReceived( null, entity ) )
+			.then( function onPhantomRegistered() {
+				return new self.q( function resolver( resolve, reject ) {
+
+					if( timeout === null ) {
+						// The user did not want to wait for the replacement.
+						return resolve( entity );
+					}
+
+					var removeTimeout  = null;
+					var removeListener = null;
+
+					if( timeout < Number.POSITIVE_INFINITY ) {
+						removeTimeout = setTimeout( function abortWaiting() {
+							if( removeListener ) {
+								removeListener();
+							}
+
+							reject( new Error( "Phantom was not replaced in time." ) );
+						}, timeout );
+					}
+
+					removeListener = self.scope.$on( "entityUpdated", function onEntityUpdated( event, args ) {
+						if( args.entity.id === entity.id ) {
+							removeListener();
+							clearTimeout( removeTimeout );
+
+							removeListener = null;
+							removeTimeout  = null;
+
+							resolve( args.entity );
+						}
+					} );
+				} );
+			} );
 	};
 
 	/**
