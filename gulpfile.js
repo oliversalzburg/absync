@@ -87,7 +87,7 @@ gulp.task( "js", [ "clean:js" ], buildJs );
 
 
 // Main watch task.
-gulp.task( "watch", function watch() {
+gulp.task( "watch", [ "default" ], function watch() {
 	var jsWatcher = gulp.watch( config.Sources.Scripts, { cwd : config.WorkingDirectory }, [ "js:watch" ] );
 
 	function handleChangeEvent( event ) {

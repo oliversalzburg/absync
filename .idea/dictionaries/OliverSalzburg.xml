@@ -4,6 +4,7 @@
       <w>absync</w>
       <w>deferreds</w>
       <w>deserialized</w>
+      <w>teardown</w>
       <w>typefactory</w>
       <w>typehelper</w>
       <w>typeinfo</w>

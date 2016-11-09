@@ -17,7 +17,7 @@ angular.module( "absync", [] );
  *    Modifying these values from outside of absync is discouraged, but should be respected whenever possible.
  */
 
-getAbsyncProvider.$inject = ["$injector", "$provide", "absyncCache"];
+getAbsyncProvider.$inject = ["$provide", "absyncCache"];
 angular
 	.module( "absync" )
 	.provider( "absync", getAbsyncProvider );
@@ -29,22 +29,19 @@ angular
  * @param {Function} absyncCache The AbsyncCache service constructor.
  * @ngInject
  */
-function getAbsyncProvider( $injector, $provide, absyncCache ) {
-	return new AbsyncProvider( $injector, $provide, absyncCache );
+function getAbsyncProvider( $provide, absyncCache ) {
+	return new AbsyncProvider( $provide, absyncCache );
 }
 
 /**
  * Retrieves the absync provider.
- * @param {angular.auto.IInjectorService|Object} $injector The $injector provider.
  * @param {angular.auto.IProvideService|Object} $provide The $provide provider.
  * @param {Function} absyncCache The AbsyncCache service constructor.
  * @constructor
  */
-function AbsyncProvider( $injector, $provide, absyncCache ) {
+function AbsyncProvider( $provide, absyncCache ) {
 	var self = this;
 
-	// Store a reference to the inject provider.
-	self.__injector    = $injector;
 	// Store a reference to the provide provider.
 	self.__provide     = $provide;
 	// Store a reference to the cache service constructor.
@@ -188,6 +185,13 @@ AbsyncProvider.prototype.collection = function AbsyncProvider$collection( name, 
 		configuration : configuration
 	};
 
+	if( configuration.provideService === false ) {
+		if( !configuration.injector ) {
+			throw new Error( "Injector is missing in service configuration." );
+		}
+		return configuration.injector.instantiate( self.__collections[ name ].constructor );
+	}
+
 	// Register the new service.
 	// Yes, we want an Angular "service" here, because we want it constructed with "new".
 	self.__provide.service( name, self.__collections[ name ].constructor );
@@ -221,11 +225,38 @@ AbsyncProvider.prototype.entity = function AbsyncProvider$entity( name, configur
 		configuration : configuration
 	};
 
+	if( configuration.provideService === false ) {
+		var $injector = angular.injector( [ "ng", "absync" ] );
+		return $injector.instantiate( self.__collections[ name ].constructor );
+	}
+
 	// Register the new service.
 	// Yes, we want an Angular "service" here, because we want it constructed with "new".
 	self.__provide.service( name, self.__entities[ name ].constructor );
 };
 
+
+/**
+ * Destroy a service.
+ * @param {CacheService} service
+ */
+AbsyncProvider.prototype.teardown = function AbsyncProvider$teardown( service ) {
+	var self = this;
+
+	var serviceDefinition = self.__entities[ service.name ] || self.__collections[ service.name ];
+	if( !serviceDefinition ) {
+		throw new Error( "A service with the name '" + service.name + "' was not registered." );
+	}
+
+	if( serviceDefinition.configuration.provideService !== false ) {
+		throw new Error( "The service '" + service.name + "' was registered as an injectable service and can not be torn down." );
+	}
+
+	delete self.__entities[ service.name ];
+	delete self.__collections[ service.name ];
+
+	service.teardown();
+};
 
 /**
  * Register an event listener that is called when a specific entity is received on the websocket.
@@ -258,6 +289,22 @@ AbsyncProvider.prototype.on = function AbsyncProvider$on( eventName, callback ) 
 		eventName : eventName,
 		callback  : callback
 	} );
+};
+
+/**
+ * Remove a previous registered listener.
+ * @param {Function} callback
+ */
+AbsyncProvider.prototype.off = function AbsyncProvider$off( eventName, callback ) {
+	var self = this;
+
+	for( var listenerIndex = 0; listenerIndex < self.__listeners.length; ++listenerIndex ) {
+		if( self.__listeners[ listenerIndex ].eventName === eventName && self.__listeners[ listenerIndex ].callback === callback ) {
+			self.__listeners.splice( listenerIndex, 1 );
+			self.__listeners[ listenerIndex ].unregister();
+			return;
+		}
+	}
 };
 
 /**
@@ -401,19 +448,21 @@ function getServiceConstructor( name, configuration ) {
 		// Do the same for our logger.
 		self.logInterface  = configuration.debug ? $log : absyncNoopLog;
 		// The scope on which we broadcast all our relevant events.
-		self.scope         = $rootScope;
+		self.scope         = configuration.scope || $rootScope;
 		// Keep a reference to $q.
 		self.q             = $q;
+		// Keep a reference to absync itself.
+		self.absync        = absync;
 
 		// Prefix log messages with this string.
 		self.logPrefix = "absync:" + name.toLocaleUpperCase() + " ";
 
 		// If enabled, entities received in response to a create or update API call, will be put into the cache.
 		// Otherwise, absync will wait for them to be published through the websocket channel.
-		self.forceEarlyCacheUpdate = false;
+		self.forceEarlyCacheUpdate = configuration.forceEarlyCacheUpdate || false;
 
 		// Throws failures so that they can be handled outside of absync.
-		self.throwFailures = true;
+		self.throwFailures = typeof configuration.throwFailures !== "undefined" ? configuration.throwFailures : true;
 
 		// Expose the serializer/deserializer so that they can be adjusted at any time.
 		self.serializer   = serializeModel;
@@ -422,19 +471,27 @@ function getServiceConstructor( name, configuration ) {
 		// Store a reference to the optional filter function.
 		self.filter = configuration.filter;
 
+		// Bind event handlers to this cache service, to ensure consistent this binding.
+		self.__onEntityOnWebsocketBound     = self.__onEntityOnWebsocket.bind( self );
+		self.__onCollectionOnWebsocketBound = self.__onCollectionOnWebsocket.bind( self );
+		self.__onEntityReceivedBound        = self.__onEntityReceived.bind( self );
+		self.__onCollectionReceivedBound    = self.__onCollectionReceived.bind( self );
+
 		// Tell absync to register an event listener for both our entity and its collection.
 		// When we receive these events, we broadcast an equal Angular event on the root scope.
 		// This way the user can already peek at the data (manipulating it is discouraged though).
-		absync.on( configuration.entityName, self.__onEntityOnWebsocket.bind( self ) );
+		absync.on( configuration.entityName, self.__onEntityOnWebsocketBound );
 		if( configuration.collectionName ) {
-			absync.on( configuration.collectionName, self.__onCollectionOnWebsocket.bind( self ) );
+			absync.on( configuration.collectionName, self.__onCollectionOnWebsocketBound );
 		}
 
 		// Now we listen on the root scope for the same events we're firing above.
 		// This is where our own absync synchronization logic kicks in.
-		$rootScope.$on( configuration.entityName, self.__onEntityReceived.bind( self ) );
+		self.__onEntityReceivedBound.unregister = $rootScope.$on( configuration.entityName,
+			self.__onEntityReceivedBound );
 		if( configuration.collectionName ) {
-			$rootScope.$on( configuration.collectionName, self.__onCollectionReceived.bind( self ) );
+			self.__onCollectionReceivedBound.unregister = $rootScope.$on( configuration.collectionName,
+				self.__onCollectionReceivedBound );
 		}
 
 		self.logInterface.info( self.logPrefix + "service was instantiated." );
@@ -1451,6 +1508,20 @@ function getServiceConstructor( name, configuration ) {
 
 		self.__entityCacheRaw = null;
 		self.__requestCache   = {};
+	};
+
+	CacheService.prototype.teardown = function CacheService$teardown() {
+		var self = this;
+
+		self.absync.off( self.__onEntityOnWebsocketBound );
+		self.absync.off( self.__onCollectionOnWebsocketBound );
+
+		if( self.__onEntityReceivedBound.unregister ) {
+			self.__onEntityReceivedBound.unregister();
+		}
+		if( self.__onCollectionReceivedBound.unregister ) {
+			self.__onCollectionReceivedBound.unregister();
+		}
 	};
 
 	return CacheService;

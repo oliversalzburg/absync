@@ -89,19 +89,21 @@ function getServiceConstructor( name, configuration ) {
 		// Do the same for our logger.
 		self.logInterface  = configuration.debug ? $log : absyncNoopLog;
 		// The scope on which we broadcast all our relevant events.
-		self.scope         = $rootScope;
+		self.scope         = configuration.scope || $rootScope;
 		// Keep a reference to $q.
 		self.q             = $q;
+		// Keep a reference to absync itself.
+		self.absync        = absync;
 
 		// Prefix log messages with this string.
 		self.logPrefix = "absync:" + name.toLocaleUpperCase() + " ";
 
 		// If enabled, entities received in response to a create or update API call, will be put into the cache.
 		// Otherwise, absync will wait for them to be published through the websocket channel.
-		self.forceEarlyCacheUpdate = false;
+		self.forceEarlyCacheUpdate = configuration.forceEarlyCacheUpdate || false;
 
 		// Throws failures so that they can be handled outside of absync.
-		self.throwFailures = true;
+		self.throwFailures = typeof configuration.throwFailures !== "undefined" ? configuration.throwFailures : true;
 
 		// Expose the serializer/deserializer so that they can be adjusted at any time.
 		self.serializer   = serializeModel;
@@ -110,19 +112,27 @@ function getServiceConstructor( name, configuration ) {
 		// Store a reference to the optional filter function.
 		self.filter = configuration.filter;
 
+		// Bind event handlers to this cache service, to ensure consistent this binding.
+		self.__onEntityOnWebsocketBound     = self.__onEntityOnWebsocket.bind( self );
+		self.__onCollectionOnWebsocketBound = self.__onCollectionOnWebsocket.bind( self );
+		self.__onEntityReceivedBound        = self.__onEntityReceived.bind( self );
+		self.__onCollectionReceivedBound    = self.__onCollectionReceived.bind( self );
+
 		// Tell absync to register an event listener for both our entity and its collection.
 		// When we receive these events, we broadcast an equal Angular event on the root scope.
 		// This way the user can already peek at the data (manipulating it is discouraged though).
-		absync.on( configuration.entityName, self.__onEntityOnWebsocket.bind( self ) );
+		absync.on( configuration.entityName, self.__onEntityOnWebsocketBound );
 		if( configuration.collectionName ) {
-			absync.on( configuration.collectionName, self.__onCollectionOnWebsocket.bind( self ) );
+			absync.on( configuration.collectionName, self.__onCollectionOnWebsocketBound );
 		}
 
 		// Now we listen on the root scope for the same events we're firing above.
 		// This is where our own absync synchronization logic kicks in.
-		$rootScope.$on( configuration.entityName, self.__onEntityReceived.bind( self ) );
+		self.__onEntityReceivedBound.unregister = $rootScope.$on( configuration.entityName,
+			self.__onEntityReceivedBound );
 		if( configuration.collectionName ) {
-			$rootScope.$on( configuration.collectionName, self.__onCollectionReceived.bind( self ) );
+			self.__onCollectionReceivedBound.unregister = $rootScope.$on( configuration.collectionName,
+				self.__onCollectionReceivedBound );
 		}
 
 		self.logInterface.info( self.logPrefix + "service was instantiated." );
@@ -1139,6 +1149,20 @@ function getServiceConstructor( name, configuration ) {
 
 		self.__entityCacheRaw = null;
 		self.__requestCache   = {};
+	};
+
+	CacheService.prototype.teardown = function CacheService$teardown() {
+		var self = this;
+
+		self.absync.off( self.__onEntityOnWebsocketBound );
+		self.absync.off( self.__onCollectionOnWebsocketBound );
+
+		if( self.__onEntityReceivedBound.unregister ) {
+			self.__onEntityReceivedBound.unregister();
+		}
+		if( self.__onCollectionReceivedBound.unregister ) {
+			self.__onCollectionReceivedBound.unregister();
+		}
 	};
 
 	return CacheService;
