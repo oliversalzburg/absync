@@ -12,7 +12,7 @@
  *    Modifying these values from outside of absync is discouraged, but should be respected whenever possible.
  */
 
-getAbsyncProvider.$inject = ["$injector", "$provide", "absyncCache"];
+getAbsyncProvider.$inject = ["$provide", "absyncCache"];
 angular
 	.module( "absync" )
 	.provider( "absync", getAbsyncProvider );
@@ -24,22 +24,19 @@ angular
  * @param {Function} absyncCache The AbsyncCache service constructor.
  * @ngInject
  */
-function getAbsyncProvider( $injector, $provide, absyncCache ) {
-	return new AbsyncProvider( $injector, $provide, absyncCache );
+function getAbsyncProvider( $provide, absyncCache ) {
+	return new AbsyncProvider( $provide, absyncCache );
 }
 
 /**
  * Retrieves the absync provider.
- * @param {angular.auto.IInjectorService|Object} $injector The $injector provider.
  * @param {angular.auto.IProvideService|Object} $provide The $provide provider.
  * @param {Function} absyncCache The AbsyncCache service constructor.
  * @constructor
  */
-function AbsyncProvider( $injector, $provide, absyncCache ) {
+function AbsyncProvider( $provide, absyncCache ) {
 	var self = this;
 
-	// Store a reference to the inject provider.
-	self.__injector    = $injector;
 	// Store a reference to the provide provider.
 	self.__provide     = $provide;
 	// Store a reference to the cache service constructor.
@@ -183,6 +180,13 @@ AbsyncProvider.prototype.collection = function AbsyncProvider$collection( name, 
 		configuration : configuration
 	};
 
+	if( configuration.provideService === false ) {
+		if( !configuration.injector ) {
+			throw new Error( "Injector is missing in service configuration." );
+		}
+		return configuration.injector.instantiate( self.__collections[ name ].constructor );
+	}
+
 	// Register the new service.
 	// Yes, we want an Angular "service" here, because we want it constructed with "new".
 	self.__provide.service( name, self.__collections[ name ].constructor );
@@ -216,11 +220,38 @@ AbsyncProvider.prototype.entity = function AbsyncProvider$entity( name, configur
 		configuration : configuration
 	};
 
+	if( configuration.provideService === false ) {
+		var $injector = angular.injector( [ "ng", "absync" ] );
+		return $injector.instantiate( self.__collections[ name ].constructor );
+	}
+
 	// Register the new service.
 	// Yes, we want an Angular "service" here, because we want it constructed with "new".
 	self.__provide.service( name, self.__entities[ name ].constructor );
 };
 
+
+/**
+ * Destroy a service.
+ * @param {CacheService} service
+ */
+AbsyncProvider.prototype.teardown = function AbsyncProvider$teardown( service ) {
+	var self = this;
+
+	var serviceDefinition = self.__entities[ service.name ] || self.__collections[ service.name ];
+	if( !serviceDefinition ) {
+		throw new Error( "A service with the name '" + service.name + "' was not registered." );
+	}
+
+	if( serviceDefinition.configuration.provideService !== false ) {
+		throw new Error( "The service '" + service.name + "' was registered as an injectable service and can not be torn down." );
+	}
+
+	delete self.__entities[ service.name ];
+	delete self.__collections[ service.name ];
+
+	service.teardown();
+};
 
 /**
  * Register an event listener that is called when a specific entity is received on the websocket.
@@ -253,6 +284,22 @@ AbsyncProvider.prototype.on = function AbsyncProvider$on( eventName, callback ) 
 		eventName : eventName,
 		callback  : callback
 	} );
+};
+
+/**
+ * Remove a previous registered listener.
+ * @param {Function} callback
+ */
+AbsyncProvider.prototype.off = function AbsyncProvider$off( eventName, callback ) {
+	var self = this;
+
+	for( var listenerIndex = 0; listenerIndex < self.__listeners.length; ++listenerIndex ) {
+		if( self.__listeners[ listenerIndex ].eventName === eventName && self.__listeners[ listenerIndex ].callback === callback ) {
+			self.__listeners.splice( listenerIndex, 1 );
+			self.__listeners[ listenerIndex ].unregister();
+			return;
+		}
+	}
 };
 
 /**
