@@ -487,10 +487,10 @@ function getServiceConstructor( name, configuration ) {
 
 		// Now we listen on the root scope for the same events we're firing above.
 		// This is where our own absync synchronization logic kicks in.
-		self.__onEntityReceivedBound.unregister = $rootScope.$on( configuration.entityName,
+		self.__onEntityReceivedBound.unregister = self.scope.$on( configuration.entityName,
 			self.__onEntityReceivedBound );
 		if( configuration.collectionName ) {
-			self.__onCollectionReceivedBound.unregister = $rootScope.$on( configuration.collectionName,
+			self.__onCollectionReceivedBound.unregister = self.scope.$on( configuration.collectionName,
 				self.__onCollectionReceivedBound );
 		}
 
@@ -505,6 +505,7 @@ function getServiceConstructor( name, configuration ) {
 	 */
 	CacheService.prototype.__onEntityOnWebsocket = function CacheService$onEntityOnWebsocket( message ) {
 		var self = this;
+		self.logInterface.debug( self.logPrefix + "entity received", message );
 		self.scope.$broadcast( configuration.entityName, message[ configuration.entityName ] );
 	};
 
@@ -516,6 +517,7 @@ function getServiceConstructor( name, configuration ) {
 	 */
 	CacheService.prototype.__onCollectionOnWebsocket = function CacheService$onCollectionOnWebsocket( message ) {
 		var self = this;
+		self.logInterface.debug( self.logPrefix + "collection received", message );
 		self.scope.$broadcast( configuration.collectionName, message[ configuration.collectionName ] );
 	};
 
