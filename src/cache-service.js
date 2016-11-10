@@ -146,6 +146,7 @@ function getServiceConstructor( name, configuration ) {
 	 */
 	CacheService.prototype.__onEntityOnWebsocket = function CacheService$onEntityOnWebsocket( message ) {
 		var self = this;
+		self.logInterface.debug( self.logPrefix + "entity received", message );
 		self.scope.$broadcast( configuration.entityName, message[ configuration.entityName ] );
 	};
 
@@ -157,6 +158,7 @@ function getServiceConstructor( name, configuration ) {
 	 */
 	CacheService.prototype.__onCollectionOnWebsocket = function CacheService$onCollectionOnWebsocket( message ) {
 		var self = this;
+		self.logInterface.debug( self.logPrefix + "collection received", message );
 		self.scope.$broadcast( configuration.collectionName, message[ configuration.collectionName ] );
 	};
 
