@@ -1041,6 +1041,11 @@ function getServiceConstructor( name, configuration ) {
 			return self.q.all( promises );
 
 		} else {
+			if( entity[ propertyName ] === null ) {
+				return self.q.when( null )
+					.then( onComplexRetrieved );
+			}
+
 			// We usually assume the properties to be strings (the ID of the referenced complex).
 			if( typeof entity[ propertyName ] !== "string" ) {
 				// If "force" is enabled, we check if this non-string property is an object and has an "id" member, which is a string.
