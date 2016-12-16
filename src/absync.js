@@ -21,19 +21,21 @@ angular
  * @param {Function} absyncCache The AbsyncCache service constructor.
  * @ngInject
  */
-function getAbsyncProvider( $provide, absyncCache ) {
-	return new AbsyncProvider( $provide, absyncCache );
+function getAbsyncProvider( $injector, $provide, absyncCache ) {
+	return new AbsyncProvider( $injector, $provide, absyncCache );
 }
 
 /**
  * Retrieves the absync provider.
+ * @param {angular.auto.IInjectorService|Object} $injector The $injector provider.
  * @param {angular.auto.IProvideService|Object} $provide The $provide provider.
  * @param {Function} absyncCache The AbsyncCache service constructor.
  * @constructor
  */
-function AbsyncProvider( $provide, absyncCache ) {
+function AbsyncProvider( $injector, $provide, absyncCache ) {
 	var self = this;
 
+	self.__injector    = $injector;
 	// Store a reference to the provide provider.
 	self.__provide     = $provide;
 	// Store a reference to the cache service constructor.
@@ -150,7 +152,7 @@ AbsyncProvider.prototype.__registerListener = function AbsyncProvider$registerLi
 	self.__listeners.push( listener );
 
 	// Register the listener and remember the function to use when the listener should be unregistered.
-	listener.unregister = self.__handleEntityEvent( listener.eventName, listener.callback );
+	listener.unregister = self.__registerEntityEventListener( listener.eventName, listener.callback );
 };
 
 /**
@@ -183,9 +185,12 @@ AbsyncProvider.prototype.collection = function AbsyncProvider$collection( name, 
 
 	if( configuration.provideService === false ) {
 		if( !configuration.injector ) {
-			throw new Error( "Injector is missing in service configuration." );
+			var $injector = angular.injector( [ "ng", "todomvc" ] );
+			configuration.injector = $injector;
+			//throw new Error( "Injector is missing in service configuration." );
 		}
-		return configuration.injector.instantiate( self.__collections[ name ].constructor );
+		self.__collections[ name ].instance = configuration.injector.instantiate( self.__collections[ name ].constructor );
+		return self.__collections[ name ].instance;
 	}
 
 	// Register the new service.
@@ -231,6 +236,18 @@ AbsyncProvider.prototype.entity = function AbsyncProvider$entity( name, configur
 	self.__provide.service( name, self.__entities[ name ].constructor );
 };
 
+AbsyncProvider.prototype.sync = function AbsyncProvider$sync( name, configuration ) {
+	var self = this;
+
+	if( self.__collections[ name ] && self.__collections[ name ].instance ) {
+		return self.__collections[ name ].instance;
+	}
+
+	//configuration.injector       = self.__injector;
+	configuration.provideService = false;
+
+	return self.collection( name, configuration );
+};
 
 /**
  * Destroy a service.
@@ -310,7 +327,7 @@ AbsyncProvider.prototype.off = function AbsyncProvider$off( eventName, callback 
  * @param {Function} callback The function to call when the entity is received.
  * @returns {Function}
  */
-AbsyncProvider.prototype.__handleEntityEvent = function AbsyncProvider$handleEntityEvent( eventName, callback ) {
+AbsyncProvider.prototype.__registerEntityEventListener = function AbsyncProvider$registerEntityEventListener( eventName, callback ) {
 	var self = this;
 
 	// Register the callback with socket.io.
@@ -320,27 +337,6 @@ AbsyncProvider.prototype.__handleEntityEvent = function AbsyncProvider$handleEnt
 	return function removeListener() {
 		self.__ioSocket.removeListener( eventName, callback );
 	};
-};
-
-/**
- * Convenience method to allow the user to emit() from the socket.io connection.
- * This is not utilized in absync internally.
- * @param {String} eventName
- * @param {*} data
- * @param {Function} [callback]
- */
-AbsyncProvider.prototype.emit = function AbsyncProvider$emit( eventName, data, callback ) {
-	var self = this;
-
-	if( !self.__ioSocket ) {
-		throw new Error( "socket.io is not initialized." );
-	}
-
-	self.__ioSocket.emit( eventName, data, function afterEmit() {
-		if( callback ) {
-			callback.apply( self.__ioSocket, arguments );
-		}
-	} );
 };
 
 /**
