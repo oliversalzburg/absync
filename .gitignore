@@ -1,7 +1,11 @@
+.idea/dbnavigator.xml
+.idea/deployment.xml
+.idea/markdown-navigator/
+.idea/markdown-navigator.*
+.idea/workspace.xml
+
 bower_components/
 coverage/
 node_modules/
-.idea/dbnavigator.xml
-.idea/deployment.xml
-.idea/workspace.xml
+
 npm-debug.log
