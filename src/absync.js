@@ -72,6 +72,10 @@ function AbsyncProvider( $provide, absyncCache ) {
 AbsyncProvider.prototype.configure = function AbsyncProvider$configure( configuration ) {
 	var self = this;
 
+	if( configuration.constructor.name === "Socket" ) {
+		throw new Error( "configure() expects input to be hash that provides the Socket.IO instance through a 'socket' property." );
+	}
+
 	if( typeof configuration.socket !== "undefined" ) {
 		var socket   = configuration.socket;
 		// Determine if the socket is an io.Socket.
@@ -86,7 +90,7 @@ AbsyncProvider.prototype.configure = function AbsyncProvider$configure( configur
 			self.__ioSocket = socket;
 
 		} else {
-			throw new Error( "configure() expects input to be a function or a socket.io Socket instance." );
+			throw new Error( "configure() expects the socket to be a Socket constructor or a socket.io Socket instance." );
 		}
 
 		// Check if services already tried to register listeners, if so, register them now.
@@ -285,6 +289,7 @@ AbsyncProvider.prototype.on = function AbsyncProvider$on( eventName, callback ) 
 
 /**
  * Remove a previous registered listener.
+ * @param {String} eventName
  * @param {Function} callback
  */
 AbsyncProvider.prototype.off = function AbsyncProvider$off( eventName, callback ) {
