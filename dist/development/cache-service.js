@@ -1055,7 +1055,8 @@ function getServiceConstructor( name, configuration ) {
 
 				} else {
 					if( self.throwFailures ) {
-						throw new Error( "The referenced entity did not have an 'id' property that would be expected." );
+						self.logInterface.debug( entity );
+						throw new Error( "The referenced entity did not have an 'id' property that would be expected. absync was looking for a property named '" + propertyName + "' on the entity, and the value was '" + entity[ propertyName ] + "'." );
 					}
 					return self.q.when( false );
 				}
@@ -1076,7 +1077,8 @@ function getServiceConstructor( name, configuration ) {
 
 				} else {
 					if( self.throwFailures ) {
-						throw new Error( "The referenced entity did not have an 'id' property that would be expected." );
+						self.logInterface.debug( entity );
+						throw new Error( "The referenced entity did not have an 'id' property that would be expected. absync was looking for a property named '" + propertyName + "' on the entity, and the array did not contain an appropriate value at index '" + index + "'." );
 					}
 
 					return self.q.when( false );
