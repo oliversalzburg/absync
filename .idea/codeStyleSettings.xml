@@ -140,6 +140,11 @@
             <option name="SMART_TABS" value="true" />
           </indentOptions>
         </codeStyleSettings>
+        <codeStyleSettings language="yaml">
+          <indentOptions>
+            <option name="INDENT_SIZE" value="4" />
+          </indentOptions>
+        </codeStyleSettings>
       </value>
     </option>
     <option name="USE_PER_PROJECT_SETTINGS" value="true" />
