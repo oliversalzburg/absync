@@ -395,7 +395,7 @@
     // require or disallow an empty line after variable declarations
     "newline-after-var": 0,
     // require an empty line before return statements
-    "newline-before-return": 2,
+    "newline-before-return": 0,
     // require a newline after each call in a method chain
     "newline-per-chained-call": 2,
     // disallow Array constructors
@@ -479,10 +479,7 @@
       "always"
     ],
     // require or disallow assignment operator shorthand where possible
-    "operator-assignment": [
-      2,
-      "never"
-    ],
+    "operator-assignment": 0,
     // enforce consistent linebreak style for operators
     "operator-linebreak": [
       2,
@@ -560,7 +557,7 @@
     // require or disallow Unicode byte order mark (BOM)
     "unicode-bom": 0,
     // require parenthesis around regex literals
-    "wrap-regex": 2,
+    "wrap-regex": 0,
     // =================================================
     // ==== ECMAScript 6
     // =================================================
@@ -605,7 +602,7 @@
     // require const declarations for variables that are never reassigned after declared
     "prefer-const": 2,
     // require destructuring from arrays and/or objects
-    "prefer-destructuring": 2,
+    "prefer-destructuring": 0,
     // disallow parseInt() in favor of binary, octal, and hexadecimal literals
     "prefer-numeric-literals": 0,
     // require rest parameters instead of arguments
