@@ -330,12 +330,16 @@
         "before": true,
         "after": false,
         "overrides": {
+          "else": {
+            "before": true,
+            "after": true
+          },
           "return": {
             "before": false,
             "after": true
           },
-          "else": {
-            "before": true,
+          "try": {
+            "before": false,
             "after": true
           }
         }
