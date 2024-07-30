@@ -1,5 +1,9 @@
 ![](doc/logo.png)
 
+> [!CAUTION]
+> At its time, **absync** was an absolutely ground-breaking technology that didn't even see any recognition from a larger audience. Aggressive small-scale dataset synchronization between backend and frontend over WebSocket connection is still a topic of active development today. absync provided a treamendously mature solution for idea at very early times of modern web frontend development.
+> Today, the project is unmaintained and obsolete. Hopefully it can still spark new ideas, but it has been officially **archived as of 2024-07-30**.
+
 [![Build Status](https://travis-ci.org/oliversalzburg/absync.svg?branch=master)](https://travis-ci.org/oliversalzburg/absync)
 [![Coverage Status](https://coveralls.io/repos/github/oliversalzburg/absync/badge.svg?branch=master)](https://coveralls.io/github/oliversalzburg/absync?branch=master)
 
